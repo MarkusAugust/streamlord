@@ -199,6 +199,15 @@ private class PlaceholderHtml(
             )
 }
 
+/** What the placeholder form reads of an Html's format: a per cent sign written twice, or a placeholder. */
+private val HELD_PERCENT = regex("""%%|%s""")
+
+/** The name a lambda's brace follows, as [Analyzer.runsLater] reads it. */
+private val NAME_BEFORE = regex("""[\p{L}_][\p{L}\p{Nd}_]*$""")
+
+/** Calls whose trailing lambda runs after the call returns, if at all. */
+private val KEPT_FOR_LATER = setOf("lazy", "thread", "launch", "async", "sequence", "flow", "Runnable", "Thread")
+
 private val CONSTANT_NAME = regex("""(?:^|\.)([A-Z]+)\s*$""")
 
 /** The constant [arg] names, `APPEND` of `ElementPatchMode.APPEND` or of an imported `APPEND`; null for a value the code computes. */
@@ -406,6 +415,19 @@ public class Analyzer(
         return withNested(lex.strings).also { lastNested = lex to it }
     }
 
+    @Volatile
+    private var lastStarts: Pair<List<KotlinString>, Map<Int, KotlinString>>? = null
+
+    /** The literal of [src] that starts at [start], one in a template's code among them, or null. */
+    internal fun literalAt(
+        src: String,
+        start: Int,
+    ): KotlinString? {
+        val all = nested(src)
+        lastStarts?.let { if (it.first === all) return it.second[start] }
+        return all.associateBy { it.start }.also { lastStarts = all to it }[start]
+    }
+
     /** The issues of a Kotlin file of which nothing more is known than its text. */
     public fun analyzeKotlin(src: String): List<Issue> = analyzeKotlin(Source(src, SourceLanguage.KOTLIN))
 
@@ -498,15 +520,31 @@ public class Analyzer(
                 )
             }
         val htmls = if (blocks.isEmpty()) emptyList() else placeholderHtmls(src, facts.code, placeholderSites, blocks)
+        // The Html of the call whose opening bracket is at an offset, where it holds a mark of a block: an Html handed on is
+        // escaped outside element text, marks, quotes and all.
+        val byBracket = htmls.associateBy { it.site.openParen }
+        val heldHtml = HashMap<Int, HeldMark?>()
+        val htmlAt = { at: Int ->
+            // Not getOrPut, which takes a stored null for none.
+            if (at in heldHtml) {
+                heldHtml[at]
+            } else {
+                byBracket[at]
+                    ?.let { h ->
+                        marksHeld(src, opts, h)?.let {
+                            val call = src.substring(h.site.nameStart, h.site.closeParen + 1)
+                            HeldMark(call, h.site.nameStart, it, Holding.HTML, text = heldText(src, facts.code, h))
+                        }
+                    }.also { heldHtml[at] = it }
+            }
+        }
         for (site in placeholderSites) {
             if (foreign(site.name, site.nameStart)) continue
             val format = interpolateFormat(site, src, facts.code) ?: continue
             claimed += format.second.start
             for (x in format.second.literals) claimed += x.start
             val inHtml = htmls.firstOrNull { it.site === site }?.let { MarksInHtml(it.givenAt != null) }
-            // An Html handed to it is escaped outside element text, marks, quotes and all.
-            val held = { at: Int -> htmls.firstOrNull { it.site.nameStart == at }?.let { marksHeld(src, opts, it) } }
-            val issues = checkInterpolateSite(site, format.first, format.second, src, opts, hyphenated, inHtml, held)
+            val issues = checkInterpolateSite(site, format.first, format.second, src, opts, hyphenated, inHtml, htmlAt)
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
         out += indicatorOrderIssues(src, lex, foreign)
@@ -569,6 +607,9 @@ public class Analyzer(
                         // A Trusted's literal of marks alone the call judges where it lands, its marks among its own values.
                         html?.let { MarksInHtml(it.givenAt != null, judgedHere = s.start !in it.inPlace) },
                         held = held,
+                        htmlAt = htmlAt,
+                        braces = block.braces,
+                        later = { at -> runsLater(src, facts.code, at, block.braces.first) },
                     )
                 if (issues.isNotEmpty()) out += SiteIssues(block.site, whole, issues)
                 continue
@@ -848,6 +889,71 @@ public class Analyzer(
             }
         }
         return held
+    }
+
+    /**
+     * Whether the block that starts at [block] may run after the block whose mark is written at [mark] is built:
+     * where a lambda opened between them is a value kept for later, set to a name, handed in brackets, or given to a call
+     * that runs it later.
+     */
+    private fun runsLater(
+        src: String,
+        code: BooleanArray,
+        mark: Int,
+        block: Int,
+    ): Boolean {
+        val open = ArrayDeque<Int>()
+        for (i in mark until block) {
+            if (!code[i]) continue
+            if (src[i] == '{') {
+                open.addLast(i)
+            } else if (src[i] == '}') {
+                open.removeLastOrNull()
+            }
+        }
+        return open.any { brace ->
+            var k = brace - 1
+            while (k >= 0 && src[k].isWhitespace()) k--
+            // `thread(start = true) { }`: the name is the one before the call's brackets.
+            if (src.getOrNull(k) == ')') {
+                var depth = 0
+                while (k >= 0) {
+                    if (code[k] && src[k] == ')') depth++
+                    if (code[k] && src[k] == '(' && --depth == 0) break
+                    k--
+                }
+                k--
+                while (k >= 0 && src[k].isWhitespace()) k--
+                return@any k >= 0 && NAME_BEFORE.find(src.substring(maxOf(0, k - 40), k + 1))?.value in KEPT_FOR_LATER
+            }
+            val before = src.getOrNull(k)
+            before == '=' || before == '(' || before == ',' ||
+                NAME_BEFORE.find(src.substring(maxOf(0, k - 40), k + 1))?.value in KEPT_FOR_LATER
+        }
+    }
+
+    /**
+     * The text of [html] as the code writes it, each value and mark standing as text: null where a Trusted handed to it or a
+     * template that marks nothing may write markup into it.
+     */
+    private fun heldText(
+        src: String,
+        code: BooleanArray,
+        html: PlaceholderHtml,
+    ): String? {
+        if (html.trusted.isNotEmpty()) return null
+        val format = interpolateFormat(html.site, src, code)?.second ?: return null
+        if (format.interpolations.any { markedValue(it) == null }) return null
+        val text =
+            buildString {
+                var cut = 0
+                for (ip in format.interpolations.sortedBy { it.decodedStart }) {
+                    append(format.text, cut, ip.decodedStart).append('x')
+                    cut = ip.decodedStart + PLACEHOLDER.length
+                }
+                append(format.text, cut, format.text.length)
+            }
+        return HELD_PERCENT.replace(text) { if (it.value == "%%") "%" else "x" }
     }
 
     private fun placeholderHtmls(

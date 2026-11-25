@@ -250,7 +250,8 @@ internal fun readKotlinStringAt(
                         depth++
                     } else if (cj == '}') {
                         depth--
-                    } else if (cj == '"') {
+                    } else if (cj == '"' || (cj == '$' && isStringStart(src, j))) {
+                        // A literal of the code, from the first `$` of its own prefix: it opens templates with its own dollars.
                         val inner = readKotlinStringAt(src, j)
                         if (inner != null) {
                             nested += inner

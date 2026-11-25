@@ -7,6 +7,7 @@ import io.github.markusaugust.streamlord.core.client.decodeEntities
 import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.Position
 import io.github.markusaugust.streamlord.core.domain.ValueLanding
+import io.github.markusaugust.streamlord.core.domain.htmlWrittenAsMarkup
 import io.github.markusaugust.streamlord.core.domain.refusedUrlScheme
 import io.github.markusaugust.streamlord.core.domain.urlHostFixedBy
 import io.github.markusaugust.streamlord.core.domain.urlSchemeFixedBy
@@ -193,8 +194,8 @@ internal fun Analyzer.checkInterpolateSite(
     hyphenated: Set<String>,
     // Where the call stands in a block of interpolate, what its marks there are to it.
     inHtml: MarksInHtml? = null,
-    // Whether the value at an offset is an Html of the placeholder form that marks a value of the block: see judgeInterpolated.
-    held: (Int) -> Boolean? = { null },
+    // In a block, the Html of the placeholder form whose call's opening bracket is at an offset, where it holds a mark of the block.
+    htmlAt: (Int) -> HeldMark?,
 ): List<Issue> {
     val placeholders = percentPlaceholders(s.text)
     val (format, at) = withPercentPlaceholders(s, placeholders)
@@ -209,14 +210,14 @@ internal fun Analyzer.checkInterpolateSite(
             if (known[k].isOther()) null else known[k].argKind() ?: argKind(src, it.text, it.string != null, s.start)
         }
     val issues = ArrayList<Issue>()
-    // The values are always the values: a List among them is one, written as a template writes it.
+    // The values are always the values: a List among them is one, written as a template writes it. One that holds a mark of
+    // the block is refused below, and its elements written out would be too.
     val collections =
         if (plain) {
             values.mapIndexedNotNull { k, v ->
-                collectionElements(v.text)?.takeIf { it.isNotEmpty() }?.let {
-                    k to
-                        it
-                }
+                collectionElements(v.text)
+                    ?.takeIf { it.isNotEmpty() && (inHtml == null || heldMark(src, opts, v.start, v.end, s.start, htmlAt) == null) }
+                    ?.let { k to it }
             }
         } else {
             emptyList()
@@ -291,7 +292,7 @@ internal fun Analyzer.checkInterpolateSite(
         hyphenated,
         issues,
         inHtml = inHtml,
-        held = held,
+        htmlAt = htmlAt,
     )
 }
 
@@ -326,9 +327,29 @@ internal fun Analyzer.checkInterpolateBlock(
     inHtml: MarksInHtml? = null,
     // Whether the template at an offset gives an Html of the placeholder form that marks a value of the block: see
     // judgeInterpolated.
-    held: (Int) -> Boolean? = { null },
+    held: (Int) -> Boolean?,
+    // The Html of the placeholder form whose call's opening bracket is at an offset, where it holds a mark of a block.
+    htmlAt: (Int) -> HeldMark?,
+    // The block's braces, outside which a mark is another block's.
+    braces: IntRange,
+    // Whether this block may run after the block that wrote the mark at an offset has been built: in a lambda kept for later.
+    later: (Int) -> Boolean,
 ): List<Issue> {
-    val all = s.interpolations.filter { markedValue(it) != null }
+    val holding =
+        s.interpolations
+            .mapNotNull { ip ->
+                val code = codeSpan(src, ip, unmarkedCode(ip)) ?: return@mapNotNull null
+                heldMark(src, opts, code.first, code.last + 1, s.start, htmlAt)?.let { ip to it }
+            }.toMap()
+    // A template that writes a mark of a block around this one, kept by name: interpolate refuses it, since a mark stands
+    // for its value only in the markup of the block that made it. One whose value may be a number is warned as any template.
+    val outer = holding.filter { (ip, it) -> it.at !in braces && it.known && (it.whole || markedValue(ip) == null) }
+    // A template the block's own marks are written in by name: a + on it would be refused, since its value holds them as
+    // text. An Html is marked as an Html, its marks resolved in its own markup.
+    val holdsOwn = holding.filter { (ip, it) -> it.at in braces && !it.whole && !it.html && markedValue(ip) == null }.keys
+    val issues = ArrayList<Issue>()
+    for ((ip, mark) in outer) issues += outerMarkLost(ip, mark, later(mark.at))
+    val all = s.interpolations.filter { markedValue(it) != null && it !in outer }
     val read =
         all.map { ip ->
             val value = markedValue(ip)!!
@@ -340,7 +361,7 @@ internal fun Analyzer.checkInterpolateBlock(
     val marks = all.indices.filter { told[it] != ArgKind.NUMBER }
     // A name set to a mark in the block, `val title = +name`, is the mark where it is written.
     val set = s.interpolations.filter { it.kind == InterpolationKind.SIMPLE && setToMark(block, it.text) }
-    val format = s.copy(interpolations = s.interpolations - all.toSet() - set.toSet())
+    val format = s.copy(interpolations = s.interpolations - all.toSet() - set.toSet() - outer.keys)
     return judgeInterpolated(
         s,
         format,
@@ -353,11 +374,13 @@ internal fun Analyzer.checkInterpolateBlock(
         src,
         opts,
         hyphenated,
-        ArrayList(),
+        issues,
         marks.map { all[it].start until all[it].end },
         valueOfVal,
         inHtml = inHtml,
         held = held,
+        htmlAt = htmlAt,
+        holdsOwn = holdsOwn,
     )
 }
 
@@ -442,6 +465,11 @@ private fun Analyzer.judgeInterpolated(
     // form, is an Html of the placeholder form whose markup marks a value: true where the mark is refused for certain, false
     // where it may not be, a number's or one its own quote may move, null where none is marked.
     held: (Int) -> Boolean? = { null },
+    // In a block, the Html of the placeholder form whose call's opening bracket is at an offset, where it holds a mark of the
+    // block: as [held], by the call and not by where it is written.
+    htmlAt: (Int) -> HeldMark? = { null },
+    // The templates of the block whose value holds a mark of the block itself, which a + on them would lose.
+    holdsOwn: Set<Interpolation> = emptySet(),
 ): List<Issue> {
     val block = formatArg == null
     val view = markupView(src, format)
@@ -460,11 +488,13 @@ private fun Analyzer.judgeInterpolated(
             if (text == null && literal == null) unknown += at[k] else written[format.interpolations.size + k] = text ?: literal!!.text
         }
     }
+    val read = prefixes ?: listOf(opts.prefix, CatalogNames.PREFIX, CatalogNames.ALIASED_PREFIX).distinct()
+    val ranges = starts.map { it until it + PLACEHOLDER.length }
     val reading =
         readValues(
             view,
-            starts.map { it until it + PLACEHOLDER.length },
-            prefixes ?: listOf(opts.prefix, CatalogNames.PREFIX, CatalogNames.ALIASED_PREFIX).distinct(),
+            ranges,
+            read,
             written,
             marked.mapValues { (_, l) -> l.interpolations.map { it.decodedStart } },
         )
@@ -543,7 +573,7 @@ private fun Analyzer.judgeInterpolated(
         val loadsAnywhere = hostUnfixed(reading, starts, k) { j -> j == k || percentAt(j) }
         val markRefused = block && inHtml != null && landing.position != Position.TEXT
         val fixable =
-            landing.position in ESCAPED_POSITIONS && !loadsAnywhere && mapped && !markRefused &&
+            landing.position in ESCAPED_POSITIONS && !loadsAnywhere && mapped && !markRefused && ip !in holdsOwn &&
                 (ip.kind != InterpolationKind.OPERAND || (block && !ip.unread)) &&
                 percents % 2 == 0 && keeps && runningScheme(reading, starts, k) == null
         // Under trimIndent the trim now runs before the value goes in, so a line break in it is no longer trimmed.
@@ -585,6 +615,11 @@ private fun Analyzer.judgeInterpolated(
                 landing.position in ESCAPED_POSITIONS && markRefused -> {
                     "$base Marked, it would stand in an Html the placeholder form builds, outside element text, where " +
                         "interpolate refuses a marked value. $TEXT_ONLY_ADVICE"
+                }
+
+                landing.position in ESCAPED_POSITIONS && ip in holdsOwn -> {
+                    "$base It holds a mark of this block as text, so marked with + it would be escaped and the marked value " +
+                        "lost. Mark each value where it is written in the markup."
                 }
 
                 landing.position in ESCAPED_POSITIONS -> {
@@ -710,20 +745,49 @@ private fun Analyzer.judgeInterpolated(
         // the value the mark stands for would be lost: an Html is escaped outside element text.
         if (arg != null && (block || inHtml != null) && landing.position in ESCAPED_POSITIONS) {
             val lost = lostMarks(src, opts, arg, block, s.start)
-            // The call written whole, not a value read off its Html.
-            val whole = coreCall(src, arg.text.trim(), "interpolate")
-            val html = if (block || landing.position == Position.TEXT || !whole) null else held(arg.start)
+            // A mark the value holds through what Kotlin keeps of it, or an Html of the placeholder form holding one, which
+            // interpolate escapes outside element text, and in it where it is no markup in place, as core reads it. One whose
+            // value may be a number is left to the mark written whole, as before.
+            val further =
+                if (lost.isEmpty()) {
+                    heldMark(src, opts, arg.start, arg.end, s.start, htmlAt)?.takeIf { h ->
+                        val inPlace = h.text?.let { htmlWrittenAsMarkup(view, ranges, base + k, it, read, written) }
+                        val asMarkup = landing.position == Position.TEXT && (inPlace ?: landing.markupInPlace)
+                        if (h.html) !block && !asMarkup else !(block && h.whole) && h.known
+                    }
+                } else {
+                    null
+                }
+            val html = further?.takeIf { it.html }?.certain
             for (m in lost) issues += m
+            if (further != null && !further.html) issues += heldMarkLost(arg, further)
             if (html != null) {
-                val where = landing.attribute ?: landingWords(landing, endTagAt(view, d), rawElement(view, landing, d)).first
+                val escaped =
+                    when {
+                        landing.attribute != null -> {
+                            "it lands in ${landing.attribute}, where"
+                        }
+
+                        landing.position != Position.TEXT -> {
+                            "it lands in ${landingWords(landing, endTagAt(view, d), rawElement(view, landing, d)).first}, where"
+                        }
+
+                        landing.markupInPlace -> {
+                            "it leaves a tag or an element open in element text, so"
+                        }
+
+                        else -> {
+                            "it lands in ${textHolder(view, d)}, where"
+                        }
+                    }
                 val message =
                     "interpolate ${if (html) "throws" else "may throw"} here: $shown is an Html that holds a value marked in " +
-                        "the block, and it lands in $where, where interpolate escapes it as text, so the value would be lost. " +
+                        "the block, and $escaped interpolate escapes it as text: the value would be lost. " +
                         "Hand the value to the call that builds the Html, at a %s placeholder."
                 val severity = if (html) Severity.ERROR else Severity.WARNING
                 issues += Issue(arg.start, arg.end, message, severity, IssueCode.INTERPOLATE_PLACEHOLDERS)
             }
-            if (lost.isNotEmpty() || html != null) continue
+            if (lost.isNotEmpty() || html != null || further != null) continue
         }
         if (landing.position in ESCAPED_POSITIONS) {
             // Markup held as a String is text to interpolate: in element text it escapes the tags, which are then printed.
@@ -833,6 +897,261 @@ private fun Analyzer.lostMarks(
             fixes = listOf(Fix("Pass $shown itself", plus, plus + 1, "")),
         )
     }
+}
+
+/** What of a block's marks a value holds: a mark, an Html of the placeholder form holding one, or such an Html's text. */
+internal enum class Holding { MARK, HTML, HTML_TEXT }
+
+/** A mark of a block that a value holds: what it marks, or the call that builds the Html, and where its `+` or that call is. */
+internal class HeldMark(
+    val value: String,
+    val at: Int,
+    /** Whether the value the mark stands for is known to be no number, whose `+` is Kotlin's own; for an Html, one of its marks. */
+    val known: Boolean,
+    val holding: Holding = Holding.MARK,
+    /** Whether the value is the mark itself, `+name` or a name set to it, which a `+` in the block marks again as itself. */
+    val whole: Boolean = false,
+    /** Whether it holds the mark only where a branch is taken. */
+    val branch: Boolean = false,
+    /** An Html's text as the code writes it, each value and mark standing as text; null where a Trusted or a template may write markup. */
+    val text: String? = null,
+) {
+    val certain: Boolean get() = known && !branch
+    val html: Boolean get() = holding == Holding.HTML
+
+    /** This mark as a value made of this one's text holds it: an Html's text, where this is the Html. */
+    fun asText(): HeldMark = HeldMark(value, at, known, if (html) Holding.HTML_TEXT else holding, branch = branch)
+}
+
+/** What follows a mark that keeps it in the value, as Kotlin reads `+name ?: x`, `+name to x` and `+name as Any`. */
+private val KEEPS_MARK = regex("""^(?:\?:|to(?![\p{L}\p{Nd}_])|as\??\s*Any\??(?![\p{L}\p{Nd}_.]))""")
+
+/**
+ * The mark of a block that the value from [from] to [to] of [src] holds, as Kotlin reads the expression: a mark and what
+ * keeps it, a string joined to one, a branch of an `if` or a `when`, an element of a list, its `toString()`, the `.text` of an
+ * Html of the placeholder form that holds one, that Html ([htmlAt], by the call's opening bracket), and what a name is set
+ * to. [site] is where the value is written, which its names are read at. Null where the text shows none.
+ */
+internal fun Analyzer.heldMark(
+    src: String,
+    opts: Reading,
+    from: Int,
+    to: Int,
+    site: Int,
+    htmlAt: (Int) -> HeldMark?,
+    depth: Int = 0,
+): HeldMark? {
+    var a = from
+    var b = to
+    while (true) {
+        while (a < b && src[a].isWhitespace()) a++
+        while (b > a && src[b - 1].isWhitespace()) b--
+        if (b - a < 2 || src[a] != '(') break
+        val t = src.substring(a, b)
+        if (closing(t, depths(t), 0) != t.length) break
+        a++
+        b--
+    }
+    if (a >= b || depth > VALUE_DEPTH) return null
+    val t = src.substring(a, b)
+
+    fun held(span: IntRange?): HeldMark? = span?.let { heldMark(src, opts, a + it.first, a + it.last + 1, site, htmlAt, depth + 1) }
+    if (t.startsWith("+") && !t.startsWith("++") && !t.startsWith("+=")) {
+        val end = operandEnd(t, 1)
+        val rest = t.substring(end).trim()
+        if (rest.isNotEmpty() && !KEEPS_MARK.containsMatchIn(rest)) return null
+        val value = unparen(t.substring(1, end))
+        if (value.isEmpty()) return null
+        // A mark marked again is the mark it was, `+m` of `val m = +name`, another block's too.
+        if (KOTLIN_NAME.matchEntire(value) != null) {
+            val again = held(spansIn(t, listOf(value), 1)[0])
+            if (again != null && again.whole) return HeldMark(again.value, again.at, again.known, whole = rest.isEmpty())
+        }
+        val kind = markKind(src, opts, a, value, site)
+        if (kind == ArgKind.NUMBER) return null
+        return HeldMark(value, a, kind != null || joinsString(value), whole = rest.isEmpty())
+    }
+    // A branch may be taken: the value holds a mark for certain only where every branch holds one as text.
+    branches(t)?.takeIf { it.size > 1 }?.let { all ->
+        val holders = spansIn(t, all, 0).mapNotNull { held(it) }
+        val h = holders.firstOrNull() ?: return null
+        val text = holders.firstOrNull { !it.html }
+        if (text == null) {
+            val branch = holders.size < all.size || holders.any { it.branch }
+            val known = holders.all { it.known }
+            return HeldMark(h.value, h.at, known, Holding.HTML, branch = branch, text = holders.map { it.text }.distinct().singleOrNull())
+        }
+        val branch = holders.size < all.size || holders.any { it.html || it.branch }
+        return HeldMark(text.value, text.at, text.known, text.holding, branch = branch)
+    }
+    // A string joined to more: what each part holds is in the string's text.
+    val parts = splitTop(t, "+").map { it.trim() }
+    if (parts.size > 1) {
+        if (parts.any { it.isEmpty() } || !isStringStart(parts[0], 0)) return null
+        return spansIn(t, parts, 0).firstNotNullOfOrNull { held(it) }?.asText()
+    }
+    literalAt(src, a)?.takeIf { it.end == b }?.let { literal ->
+        for (ip in literal.interpolations) {
+            val code = codeSpan(src, ip, ip.text.trim()) ?: continue
+            return heldMark(src, opts, code.first, code.last + 1, site, htmlAt, depth + 1)?.asText() ?: continue
+        }
+        return null
+    }
+    collectionElements(t)?.let { elements -> return spansIn(t, elements, 0).firstNotNullOfOrNull { held(it) }?.asText() }
+    val call = lastCall(t)
+    if (call?.receiver != null && call.name == "toString" && call.lambda == null && call.args.isBlank()) {
+        return held(0 until call.receiver.length)?.asText()
+    }
+    TEXT_OF_VALUE.matchEntire(t)?.let { m -> return held(0 until m.groupValues[1].length)?.takeIf { it.html }?.asText() }
+    if (coreCall(src, t, "interpolate") && t.endsWith(")")) return htmlAt(a + t.indexOf('('))
+    if (KOTLIN_NAME.matchEntire(t) != null) {
+        val d = declarationOf(src, t, a)?.takeUnless { it.overridable } ?: return null
+        // Set to a call of interpolate and nothing more, the declaration keeps the call's start and no value to read.
+        if (d.markup) return if (d.trusted || d.markupAt < 0) null else htmlAt(src.indexOf('(', d.markupAt))
+        val v = d.value?.takeUnless { it.getter || it.end < 0 } ?: return null
+        return heldMark(src, opts, v.start, v.end, site, htmlAt, depth + 1)
+    }
+    return null
+}
+
+/** Where each of [parts], read off [t] in order from [from] on, stands in it: null for one not found after the one before. */
+private fun spansIn(
+    t: String,
+    parts: List<String>,
+    from: Int,
+): List<IntRange?> {
+    var cursor = from
+    return parts.map { part ->
+        val p = t.indexOf(part, cursor)
+        if (p < 0) {
+            null
+        } else {
+            cursor = p + part.length
+            p until cursor
+        }
+    }
+}
+
+/** Whether [value] is a sum with a string literal in it, which Kotlin reads as a String: no number. */
+private fun joinsString(value: String): Boolean =
+    splitTop(value, "+").let { parts ->
+        parts.size > 1 &&
+            parts.any { isStringStart(it.trim(), 0) }
+    }
+
+/** Where [code], the code of [ip] as written, stands in [src], or null where it is not inside the template. */
+private fun codeSpan(
+    src: String,
+    ip: Interpolation,
+    code: String,
+): IntRange? {
+    val p = src.indexOf(code, ip.start)
+    return if (p < 0 || p + code.length > ip.end) null else p until p + code.length
+}
+
+/** The code of a template: the name of `$name`, or the text in `${...}` without a mark's `+` before all of it. */
+private fun unmarkedCode(ip: Interpolation): String = markedValue(ip) ?: ip.text.trim()
+
+/** Where the one operand from [from] of [t] ends, as a prefix `+` takes it: a name, the calls and reads on it, brackets, a trailing lambda. */
+private fun operandEnd(
+    t: String,
+    from: Int,
+): Int {
+    val d = depths(t)
+    var i = from
+    while (i < t.length && t[i].isWhitespace()) i++
+    while (i < t.length) {
+        val c = t[i]
+        when {
+            d[i] != 0 || c.isLetterOrDigit() || c == '_' || c == '`' || c == '.' || c in "([{)]}" -> {
+                i++
+            }
+
+            t.startsWith("?.", i) || t.startsWith("!!", i) -> {
+                i += 2
+            }
+
+            c.isWhitespace() -> {
+                var j = i
+                while (j < t.length && t[j].isWhitespace()) j++
+                if (j < t.length && (t[j] == '{' || t[j] == '.' || t.startsWith("?.", j))) i = j else return i
+            }
+
+            else -> {
+                return i
+            }
+        }
+    }
+    return i
+}
+
+/** [value] with the `+` that marks it, in brackets where it is more than a name or a chain of reads. */
+private fun shownMarked(value: String): String =
+    if (PROPERTY_CHAIN.matchEntire(value) != null) "+${shortened(value)}" else "+(${shortened(value)})"
+
+/** How certainly interpolate throws for [mark]: only where a branch that holds it is taken, or where the block runs [later]. */
+private fun throwsWhere(
+    mark: HeldMark,
+    later: Boolean = false,
+): String =
+    when {
+        mark.branch -> "interpolate throws here only where the branch that holds ${shownMarked(mark.value)} is taken: "
+        later -> "interpolate throws here if it runs while the block around it is still being built: "
+        else -> "interpolate throws here: "
+    }
+
+/** What interpolate throws for [mark], which [arg] holds through more than a mark written whole or in its literal. */
+private fun heldMarkLost(
+    arg: Arg,
+    mark: HeldMark,
+): Issue {
+    val shown = shortened(mark.value)
+    val marked = shownMarked(mark.value)
+    val held = shortened(arg.text)
+    val what =
+        if (mark.holding == Holding.HTML_TEXT) {
+            "$held holds the text of an Html that holds a value marked in the block, which interpolate escapes as text, so the " +
+                "value would be lost. Hand the value to the call that builds the Html, at a %s placeholder."
+        } else {
+            "$held holds a mark of the block, $marked, which interpolate escapes as text, so the value it stands for would be " +
+                "lost. Hand $shown itself to interpolate, without +, or mark it where it stands in the block's markup."
+        }
+    val message = throwsWhere(mark) + what
+    return Issue(arg.start, arg.end, message, if (mark.certain) Severity.ERROR else Severity.WARNING, IssueCode.INTERPOLATE_PLACEHOLDERS)
+}
+
+/** What interpolate throws for a template of a block that writes [mark], a mark of a block around it, which may run [later]. */
+private fun outerMarkLost(
+    ip: Interpolation,
+    mark: HeldMark,
+    later: Boolean,
+): Issue {
+    val shown = shortened(mark.value)
+    val ofHtml = mark.holding != Holding.MARK
+    val held = if (ofHtml) "an Html that holds a value marked in the interpolate { }" else "a mark of the interpolate { }"
+    val advice =
+        if (ofHtml) {
+            "Hand the value to the call that builds the Html, at a %s placeholder."
+        } else {
+            if (PROPERTY_CHAIN.matchEntire(mark.value) != null) {
+                "Mark the value in this block: \${+${mark.value}}."
+            } else {
+                "Mark the value where it is written in this block."
+            }
+        }
+    val message =
+        throwsWhere(mark, later) +
+            "${shortened(unmarkedCode(ip))} holds $held around this one${if (ofHtml) "" else ", ${shownMarked(mark.value)}"}, " +
+            "and a mark stands for its value only in the markup " +
+            "of the block that made it, so the value would be lost. $advice"
+    val fixes =
+        if (mark.whole && PROPERTY_CHAIN.matchEntire(mark.value) != null) {
+            listOf(Fix("Mark $shown in this block", ip.start, ip.end, "\${+${mark.value}}"))
+        } else {
+            emptyList()
+        }
+    val severity = if (mark.certain && !later) Severity.ERROR else Severity.WARNING
+    return Issue(ip.start, ip.end, message, severity, IssueCode.INTERPOLATE_PLACEHOLDERS, fixes = fixes)
 }
 
 private val IF_START = regex("""^if\s*\(""")
@@ -1594,6 +1913,15 @@ internal fun Analyzer.judgeValues(
     return Judged(titled, rewrite.copy(title = title))
 }
 
+/** What holds the text at [at] of [view] that is not element text in every reading: a `<textarea>` or `<title>`, or a comment. */
+private fun Analyzer.textHolder(
+    view: String,
+    at: Int,
+): String {
+    openElement(view, at, TEXT_ELEMENTS)?.let { return "the text of a <$it>" }
+    return if (view.lastIndexOf("<!--", at) > view.lastIndexOf("-->", at)) "a comment" else "text the browser may not read as element text"
+}
+
 /** The `<style>` or `<script>` whose body the value at [at] of the markup lands in, as the markup scan reads it, or null. */
 private fun Analyzer.rawElement(
     view: String,
@@ -1601,13 +1929,25 @@ private fun Analyzer.rawElement(
     at: Int,
 ): String? {
     if (landing.position != Position.CODE || landing.attribute != null) return null
+    return openElement(view, at, RAW_ELEMENTS)
+}
+
+private val RAW_ELEMENTS = setOf("style", "script")
+private val TEXT_ELEMENTS = setOf("textarea", "title")
+
+/** Which of [names] the markup scan of [view] has open at [at], or null. */
+private fun Analyzer.openElement(
+    view: String,
+    at: Int,
+    names: Set<String>,
+): String? {
     var open: String? = null
     for (tag in tokenize(view, false).tags) {
         if (tag.start >= at) break
         val name = tag.name.asciiLowercase()
         if (tag.closing && name == open) {
             open = null
-        } else if (!tag.closing && (name == "style" || name == "script")) {
+        } else if (!tag.closing && name in names) {
             open = name
         }
     }

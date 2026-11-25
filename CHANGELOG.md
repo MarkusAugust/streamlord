@@ -33,6 +33,10 @@ All notable changes to Streamlord are recorded here. The format follows
   `interpolate("<b>%s</b>", name)`, or mark it where it stands in the block's markup. Text from
   outside never stops the page: a mark is refused only while the block that made it is being
   built (#358).
+- **Breaking:** `interpolate { }` refuses markup that holds a mark of another block still being
+  built, with an `IllegalArgumentException`: a mark of an outer block written in a block inside it,
+  `interpolate { val m = +name; interpolate { "<p>$m</p>" } }`, where the value was lost and the
+  outer block's id written into the page. Mark the value in the block it is written in (#360).
 - streamlord-spring: two test helpers in `io.github.markusaugust.streamlord.spring.test` read a
   whole stream through MockMvc, a `suspend` controller's too. `MockMvcTester.datastar(method, uri,
   signals)` sends the request as Datastar's client does, and `mockMvc.datastarRequestFactory()`
@@ -72,6 +76,18 @@ All notable changes to Streamlord are recorded here. The format follows
   a warning where the value may be a number, with the `+` taken away as its fix. So is an `Html`
   of the placeholder form holding a value marked in it, handed to a second placeholder form that
   writes it into an attribute (#358).
+- In `interpolate { }`, a mark is followed wherever Kotlin keeps it in the value, as core refuses
+  it: through a `val`, `val m = +name`, a second name, a string joined to it, `"Hi " + +name`,
+  `?:`, `to`, `as Any`, a list, `toString()`, a branch of an `if` (a warning), and the `.text` of
+  an `Html` of the placeholder form holding one. Such an `Html` handed on by name or in brackets is
+  an error in an attribute, and in a `<textarea>`, a `<title>`, a comment, or where it leaves a tag
+  or an element open, since core escapes it there as it reads it. A mark of an outer block written
+  in a block inside it is an error, with the value marked in that block as its fix, and a warning
+  where the inner block is a lambda kept for later. A list holding a mark is no longer offered
+  written out, and a template holding the block's own mark no longer the `+` that would be refused
+  (#360).
+- A multi-dollar literal in a template's code, `"${interpolate { $$"<p>$m</p>" }}"`, opens its
+  templates with its own dollars: `$m` there is text, where it was read as a template.
 - A value may be null where the calls it ends in show it, as the Kotlin compiler types it:
   `s.takeIf { c }`, `q.let { v -> v }`, `q?.plus(s ?: "")` and `xs.first()` of a
   `List<String?>` no longer have the rewrite to `interpolate` preferred, since `interpolate`
