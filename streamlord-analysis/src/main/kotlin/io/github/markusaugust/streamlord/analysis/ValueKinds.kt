@@ -182,7 +182,7 @@ private fun chainShowsNull(
 }
 
 /** Whether a value declared [type] may be null: a `?` type, or a type parameter that may stand for one. */
-private fun typeMayBeNull(
+internal fun typeMayBeNull(
     src: String,
     type: String,
 ): Boolean = type.endsWith("?") || nullableTypeParameter(src, type)
@@ -191,7 +191,7 @@ private fun typeMayBeNull(
  * The names that stand for what a lambda of the call [name] is called on, each giving [nullable]: `this` and `this@name`, or `let`'s
  * parameter, `it` where none is named. A parameter written with its type gives what the type says; the names of a destructuring show nothing.
  */
-private fun scope(
+internal fun scope(
     src: String,
     lambda: String,
     name: String,
@@ -715,7 +715,15 @@ private fun statements(body: String): List<String> {
 }
 
 /** What a lambda gives: its last expression. */
-private fun lambdaResult(body: String): String = statements(body).lastOrNull().orEmpty()
+internal fun lambdaResult(body: String): String = statements(body).lastOrNull().orEmpty()
+
+/** Where the last statement of a lambda's or a block's [body] is written in it, what the body gives; null where none is read. */
+internal fun resultIn(body: String): IntRange? {
+    val last = lambdaResult(body).ifEmpty { return null }
+    val (text, at) = uncommentedAt(body)
+    val p = text.lastIndexOf(last).takeIf { it >= 0 } ?: return null
+    return at[p]..at[p + last.length - 1]
+}
 
 /** The argument given as `name = { ... }`, as its lambda's body. */
 private fun namedLambda(

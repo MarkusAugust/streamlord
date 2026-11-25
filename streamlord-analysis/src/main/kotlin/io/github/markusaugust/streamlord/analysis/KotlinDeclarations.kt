@@ -44,9 +44,14 @@ internal class Declaration(
     val overridable: Boolean = false,
     /** Where the call it is set to starts, where it is [markup]: its qualifier's first letter, or its name's. */
     val markupAt: Int = -1,
+    /** Whether it is a `var`, which may be given another value after the one it is declared with. */
+    val mutable: Boolean = false,
 ) {
     /** Just past where it can last be seen. */
     var end: Int = Int.MAX_VALUE
+
+    /** For a [mutable] one, each value it is given: where it is declared, and in each assignment to its bare name in its sight. */
+    val assigned = ArrayList<Span>()
 }
 
 /**
@@ -772,6 +777,9 @@ internal fun codeBefore(
     while (j >= 0 && (src[j].isWhitespace() || !code[j])) j--
     return j
 }
+
+/** What stands before a name that is no variable being given a value: a receiver's dot, or a type's colon or `?`. */
+private val ASSIGNED_AFTER_NOT = setOf('.', ':', '?')
 
 /** The words that start a declaration of their own, ending a function's expression body. */
 private val DECLARATION_WORDS = setOf("fun", "val", "var", "class", "interface", "object", "init", "constructor", "typealias")
@@ -1553,6 +1561,9 @@ private fun declarations(
     // Each name a marked `return` gives whole, `return s`, and where: the literal its local is set to is marked.
     val returnedNames = ArrayList<Pair<String, Int>>()
 
+    // Each assignment to a bare name, `m = +name`, and the value it gives, which the declaration the name is of takes.
+    val assignedNames = ArrayList<Pair<String, Span>>()
+
     // What each `val` or `var` is set to where it is declared.
     val initialisers = HashMap<Declaration, Span>()
 
@@ -1893,6 +1904,7 @@ private fun declarations(
                             aliased = initialiser?.third == true,
                             overridable = overridable,
                             markupAt = initialiser?.second ?: -1,
+                            mutable = word == "var",
                         ),
                     )
                 if (owner.kind != "top") owner.ends += d
@@ -1900,6 +1912,7 @@ private fun declarations(
                     initialisers[d] = it
                     it.initialiser = true
                     f.initialising++
+                    if (d.mutable) d.assigned += it
                 }
             }
         }
@@ -2042,6 +2055,12 @@ private fun declarations(
 
                 (word == "val" || word == "var") && f.kind != "params" && f.kind != "ctor" -> {
                     property(f, word, end)
+                }
+
+                // A statement that gives a name a value, which no declaration's name, type or member is.
+                f.kind == "block" && f.word != "val" && f.word != "var" && VALUE_AFTER.matchAt(src, end) != null &&
+                    word !in HARD_KEYWORDS && src.getOrNull(codeBefore(src, code, i)) !in ASSIGNED_AFTER_NOT -> {
+                    VALUE_AFTER.matchAt(src, end)?.let { assignedNames += word to f.begin(Span(it.range.last + 1)) }
                 }
             }
             // `open` in `door.open` is a name, and says nothing of what the next line declares.
@@ -2296,6 +2315,10 @@ private fun declarations(
     }
     // A returned local's literals are marked by the declaration the name is of.
     markReturnedLocals(names, initialisers, setTo, returnedNames, marks)
+    for ((name, value) in assignedNames) {
+        val d = names[name]?.let { nearestDeclaration(it, value.start) }
+        if (d != null && d.mutable) d.assigned += value
+    }
     return names
 }
 
@@ -2437,6 +2460,7 @@ internal fun declaredKind(
     at: Int,
     nonNull: Boolean = false,
     core: Boolean = true,
+    depth: Int = 0,
 ): ValueFact? {
     val d = declarationOf(src, name, at) ?: return null
     val literal = d.literal
@@ -2445,6 +2469,17 @@ internal fun declaredKind(
             literal == "true" || literal == "false" -> ValueFact.BOOLEAN
             UNSIGNED_SUFFIX.containsMatchIn(literal) -> ValueFact.UNSIGNED
             else -> ValueFact.NUMBER
+        }
+    }
+    // Set to another name, or to a + or a - on one, `val m = +n`: the number or the boolean that name is is this one too.
+    // A + on anything else is a mark, and a - on it nothing Kotlin types.
+    if (d.type == null && depth < VALUE_DEPTH) {
+        val value = d.value?.takeIf { it.end >= 0 }?.let { valueText(src, it) }
+        val sign = value?.text?.firstOrNull()?.takeIf { it == '+' || it == '-' }
+        val named = value?.text?.drop(if (sign != null) 1 else 0)?.trim()
+        if (named != null && KOTLIN_NAME.matchEntire(named) != null) {
+            val fact = declaredKind(src, named, value.start, depth = depth + 1)
+            if (fact == ValueFact.NUMBER || (sign == null && (fact == ValueFact.BOOLEAN || fact == ValueFact.UNSIGNED))) return fact
         }
     }
     // Without core, Html, Trusted and interpolate are not Streamlord's, and nothing says what they hold.
