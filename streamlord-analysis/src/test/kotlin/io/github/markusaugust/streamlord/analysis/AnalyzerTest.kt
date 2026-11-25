@@ -160,6 +160,13 @@ class AnalyzerTest {
     }
 
     private val securityCsp = "https://data-star.dev/reference/security#content-security-policy"
+
+    /** Streamlord's documentation is read at its own domain, and an issue never links to the host behind it. */
+    @Test
+    fun `an issue on a value in an HTML string links to Streamlord's documentation at its own domain`() {
+        val link = analyzer.analyzeKotlin("fun f(name: String) = \"<p title=\\\"\$name\\\">x</p>\"").single().link
+        assertEquals("https://streamlord.sobernetics.no/strings/", link)
+    }
 }
 
 class TokensTest {
