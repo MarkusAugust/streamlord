@@ -11348,6 +11348,7 @@ unescaped-interpolation 42-64 warning: Kotlin writes the value `(if (x) name els
 == corpus/kotlin-interpolate-block.json: a value marked in the text of a marked Trusted is the block's, which escapes it
 == corpus/kotlin-interpolate-block.json: a value marked in the text of a Trusted set to a val of the block and marked there is the block's
 == corpus/kotlin-interpolate-block.json: a value marked in the text of a Trusted that a marked if gives is the block's
+== corpus/kotlin-interpolate-block.json: a value marked in a Trusted handed to the placeholder form whose Html is marked is the block's
 == corpus/kotlin-interpolate.json: a template in the format is filled before interpolate sees it
 interpolate-template 16-22 warning: Kotlin fills in $query before interpolate sees the markup, so interpolate neither escapes nor refuses it. Make it a %s placeholder and pass the value to interpolate.
   fix "Make $query a %s placeholder, which interpolate escapes" 16-22 "%s"
@@ -15341,6 +15342,8 @@ unescaped-interpolation 44-63 hint: Kotlin writes ${q?.plus(s ?: "")} into the H
 interpolate-template 256-286 warning: interpolate escapes wrap(Trusted("<i>$x</i>")) here, so the tags it holds are printed as text: it is markup held as a String. Pass the Html itself, join a list of Html with joinToHtml(), or wrap markup you built yourself in Trusted(...).
 unescaped-interpolation 276-278 warning: Kotlin writes $x into the markup Trusted(...) vouches for, as it is: Trusted escapes none of its text, $x included. If $x can hold text from outside, build this markup with interpolate { } and mark $x with +, which escapes it.
   fix "Mark the values with + in interpolate { }, which escapes the values: \"<i>$x</i>\"" 272-283 "interpolate { \"<i>${+x}</i>\" }.text" (not preferred)
+== fixes.json: in a block, a value marked in a Trusted handed on through a second placeholder form stays hinted: that form may escape the Html, marks and all
+unescaped-interpolation 299-307 hint: Kotlin writes ${+name} into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). Marking the values is not offered here: it would escape this value, which may be markup you built.
 == completions.json: the types of @intl as its first argument, quoted
 completions, alone
   "'datetime'" value 0..0
