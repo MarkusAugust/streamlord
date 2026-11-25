@@ -167,6 +167,9 @@ internal enum class ValueFact {
     companion object
 }
 
+/** The name of Trusted's argument written before it, `html = `. */
+private val NAMED_HTML = regex("""^\s*html\s*=""")
+
 private val CONSTANT_NAME = regex("""(?:^|\.)([A-Z]+)\s*$""")
 
 /** The constant [arg] names, `APPEND` of `ElementPatchMode.APPEND` or of an imported `APPEND`; null for a value the code computes. */
@@ -489,7 +492,8 @@ public class Analyzer(
             if (chain != null) for (l in chain.literals) chained += l.start
             // The innermost block a literal stands in reads it, where it is markup or marks a value: its call is the
             // issues' site, so a host that resolves calls can say it is somebody else's.
-            val block = blocks.lastOrNull { s.start in it.braces }?.takeUnless { inMarkedValue(lex.strings, s, it.braces) }
+            val trusted = facts.trustedAt(s.start)
+            val block = blocks.lastOrNull { s.start in it.braces }?.takeUnless { inMarkedValue(src, lex.strings, s, it.braces, trusted) }
             if (block != null && (isHtmlString(src, s) || '<' in whole.text || whole.interpolations.any { markedValue(it) != null })) {
                 val issues =
                     checkInterpolateBlock(
@@ -717,16 +721,31 @@ public class Analyzer(
         return open..matching(src, lex.mask, open, alone = true).let { if (it < 0) src.length - 1 else it }
     }
 
-    /** Whether [s] stands in a template of a literal of the block at [braces] that marks its value with `+`: it is that value's then. */
+    /**
+     * Whether [s] stands in a template of a literal of the block at [braces] that marks its value with `+`: it is that value's
+     * then. Not where it stands in [trusted], the argument of a `Trusted(...)` that is the marked value or a value it may result
+     * in: the block reads the text of a marked Trusted as its own markup, marks and all.
+     */
     private fun inMarkedValue(
+        src: String,
         strings: List<KotlinString>,
         s: KotlinString,
         braces: IntRange,
-    ): Boolean =
-        withNested(strings).any { outer ->
+        trusted: IntRange?,
+    ): Boolean {
+        val argument = trusted?.let { src.substring(it.first, it.last + 1).trim() }
+        return withNested(strings).any { outer ->
             outer.start in braces && outer.start < s.start && s.end <= outer.end &&
-                outer.interpolations.any { it.start <= s.start && s.end <= it.end && markedValue(it) != null }
+                outer.interpolations.any { ip ->
+                    val marked = markedValue(ip)
+                    ip.start <= s.start && s.end <= ip.end && marked != null &&
+                        templateValues(marked).none { v ->
+                            val written = v.text.substringAfter('(').substringBeforeLast(')')
+                            coreCall(src, v.text, "Trusted") && written.replace(NAMED_HTML, "").trim() == argument
+                        }
+                }
         }
+    }
 
     /** The DSL's backend helpers, `get` and `getExpr` and the rest, which take a lambda of FetchOptions. */
     private val backendHelpers: Set<String> =

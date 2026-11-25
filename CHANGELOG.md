@@ -8,6 +8,11 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### SDK
 
+- In `interpolate { }`, a value marked with `+` in the text of a `Trusted` is escaped where it
+  lands, whether the `Trusted` is marked or not: `${+Trusted("Hi <i>${+name}</i>")}`, and a `val`
+  set to one and marked later. Before, a marked `Trusted` put the mark's note, block id and all,
+  in the page and lost the value. A refusal's `index` counts the marked `Trusted` too, as the
+  placeholder form counts a `Trusted` value (#338).
 - streamlord-spring: two test helpers in `io.github.markusaugust.streamlord.spring.test` read a
   whole stream through MockMvc, a `suspend` controller's too. `MockMvcTester.datastar(method, uri,
   signals)` sends the request as Datastar's client does, and `mockMvc.datastarRequestFactory()`
@@ -29,6 +34,9 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### The analysis
 
+- A literal in a `Trusted(...)` marked in `interpolate { }`, alone or as a branch of a marked `if`,
+  is read as the block's markup, as one in a `Trusted` written unmarked is: `${+name}` in it is no
+  longer hinted, and a value Kotlin fills into it is warned and offered the mark with `+` (#338).
 - A value may be null where the calls it ends in show it, as the Kotlin compiler types it:
   `s.takeIf { c }`, `q.let { v -> v }`, `q?.plus(s ?: "")` and `xs.first()` of a
   `List<String?>` no longer have the rewrite to `interpolate` preferred, since `interpolate`

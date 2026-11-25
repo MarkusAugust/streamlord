@@ -28,7 +28,7 @@
     {"name":"in a block, an unmarked expression of two operands","params":"a: String, b: String","body":"interpolate { \"<p title=\\\"${a + b}\\\">x</p>\" }.text","rewrite":"none","marks":["${a + b}"]},
     {"name":"in a block, an unmarked row of a loop","params":"names: List<String>","body":"interpolate { \"<ul>${names.joinToString(\"\") { \"<li>$it</li>\" }}</ul>\" }.text","rewrite":"none","marks":["$it"]},
     {"name":"in a block, an unmarked value beside marked ones","params":"name: String, note: String","body":"interpolate { \"<p title=\\\"${+name}\\\">$note</p>\" }.text","rewrite":"none","marks":["$note"]},
-    {"name":"in a block, a string in a value marked as Trusted is rewritten as a block of its own, not first, since Trusted says its text is markup","params":"xs: List<String>","body":"interpolate { \"<ul>${+Trusted(xs.joinToString(\"\") { \"<li>$it</li>\" })}</ul>\" }.text","rewrite":"offered","marks":["$it"]},
+    {"name":"in a block, a string in a value marked as Trusted is markup of the block, which reads Trusted's text, so $it in it is offered the mark","params":"xs: List<String>","body":"interpolate { \"<ul>${+Trusted(xs.joinToString(\"\") { \"<li>$it</li>\" })}</ul>\" }.text","rewrite":"none","marks":["$it"]},
     {"name":"in a block, a number, a constant and an Html left unmarked say nothing","declares":"const val KIND = \"widget\"","params":"n: Int, row: Html","body":"interpolate { \"<p data-count=\\\"$n\\\" class=\\\"$KIND\\\">$row</p>\" }.text","rewrite":"none","marks":[]},
     {"name":"a return to a label in a value still returns from the lambda it names","params":"names: List<String>, name: String?","body":"names.joinToString(\"\") { \"<li title=\\\"${name ?: return@joinToString \"\"}\\\">$it</li>\" }","rewrite":"preferred","marks":["${name ?: return@joinToString \"\"}","$it"]},
     {"name":"the it of a lambda the string stands in is still that lambda's","params":"names: List<String>","body":"names.joinToString(\"\") { \"<li title=\\\"$it\\\">x</li>\" }","rewrite":"preferred","marks":["$it"]},
@@ -160,6 +160,7 @@
     {"name":"a value of the author's class in a style is passed to Trusted as its text","declares":"class Css(val w: Int) {\n    override fun toString() = \"p { width: ${w}px }\"\n}\nfun g(v: Css) = \"<style>${v}</style>\"","params":"","body":"g(Css(3))","rewrite":"offered","marks":["${v}"]},
     {"name":"a kotlin.Number in a script is no digits, as a class of it may write anything","params":"v: Number","body":"\"<script>var n = ${v};</script>\"","rewrite":"none","marks":["${v}"]},
     {"name":"an Int in a script is digits","params":"v: Int","body":"\"<script>var n = ${v};</script>\"","rewrite":"none","marks":[]},
-    {"name":"a String property of a class elsewhere, in a style, is passed to Trusted with no warning, as a template of it","params":"u: User","body":"\"<style>${u.name}</style>\"","rewrite":"offered","marks":["${u.name}"]}
+    {"name":"a String property of a class elsewhere, in a style, is passed to Trusted with no warning, as a template of it","params":"u: User","body":"\"<style>${u.name}</style>\"","rewrite":"offered","marks":["${u.name}"]},
+    {"name":"in a block, a value Kotlin fills into the text of a Trusted marked later is marked where it stands, and the block escapes it","params":"name: String","body":"interpolate {\n    val t = Trusted(\"Hi <i>$name</i>\")\n    \"<li>${+t}</li>\"\n}.text","rewrite":"none","marks":["$name"]}
   ]
 }
