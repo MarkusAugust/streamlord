@@ -52,6 +52,13 @@ All notable changes to Streamlord are recorded here. The format follows
   fills into it is warned and offered the mark with `+` (#338, #352). A value marked in the
   format of the placeholder form in the block, or in a `Trusted`'s own tags handed to it, is
   refused outside element text as core refuses it, and no mark is offered there (#354).
+- The placeholder form written in a template's code, `"<p>${interpolate("<b>%s</b>", name)}</p>"`,
+  is judged as the placeholder form, where its format was read as free HTML and a `%s` in a
+  Datastar attribute was a syntax error. In `interpolate { }`, a value marked in a `Trusted` handed
+  to it is judged where the `Trusted` lands, and a `+Trusted(...)` in its format where it stands.
+  An `Html` of it written unmarked into a quoted attribute, holding a value marked in it, is an
+  error with the mark as its fix. A value marked in it is no longer offered as a `%s` value, which
+  core would have written without it (#356).
 - A value may be null where the calls it ends in show it, as the Kotlin compiler types it:
   `s.takeIf { c }`, `q.let { v -> v }`, `q?.plus(s ?: "")` and `xs.first()` of a
   `List<String?>` no longer have the rewrite to `interpolate` preferred, since `interpolate`

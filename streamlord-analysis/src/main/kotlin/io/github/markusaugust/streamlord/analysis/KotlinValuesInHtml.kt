@@ -97,6 +97,8 @@ private class ValueReading(
     val landings: List<ValueLanding>,
     /** What the markup reads from where the value of placeholder `j`'s attribute starts to where placeholder `to` starts, each known text in place. */
     val prefix: (j: Int, to: Int) -> String,
+    /** Where each placeholder in a known text lands, by the placeholder whose text it is. */
+    val inner: Map<Int, List<ValueLanding>> = emptyMap(),
 )
 
 /** A list of plain string literals, as `interpolate` takes its prefixes: `listOf("data-x-")`. */
@@ -157,17 +159,21 @@ private fun Analyzer.literalPrefixes(
 internal fun Analyzer.interpolateFormat(
     site: CallSite,
     src: String,
+    // The code of the file, its templates' code among it, for a call that stands in a template: null for one that does not.
+    code: BooleanArray? = null,
 ): Pair<Arg, KotlinString>? {
     val lex = lex(src)
+    // A call in a template's code has its literals among the nested ones, which the lexer gives no argument.
+    val strings = if (code == null) lex.strings else nested(src)
     // The prefixes of an aliased bundle may come first, as a list; the format is the first string.
     val leading = site.positional.firstOrNull()
-    val prefixed = leading != null && leading.string == null && lex.strings.none { it.start == leading.start }
+    val prefixed = leading != null && leading.string == null && strings.none { it.start == leading.start }
     val arg = site.named("format") ?: (if (prefixed) site.positional.getOrNull(1) else null) ?: leading ?: return null
     arg.string?.let { return if (it.unterminated) null else arg to it }
-    val first = lex.strings.firstOrNull { it.start == arg.start } ?: return null
+    val first = strings.firstOrNull { it.start == arg.start } ?: return null
     // A trim call leaves each placeholder where it stood.
     if (!first.unterminated && trimAfter(src, first)?.text?.let { first.end + it.length } == arg.end) return arg to first
-    val chain = chainFrom(src, first, lex.mask)?.takeIf { it.end == arg.end } ?: return null
+    val chain = chainFrom(src, first, code ?: lex.mask)?.takeIf { it.end == arg.end } ?: return null
     return arg to chain
 }
 
@@ -185,6 +191,8 @@ internal fun Analyzer.checkInterpolateSite(
     src: String,
     opts: Reading,
     hyphenated: Set<String>,
+    // Where the call stands in a block of interpolate, what its marks there are to it.
+    inHtml: MarksInHtml? = null,
 ): List<Issue> {
     val placeholders = percentPlaceholders(s.text)
     val (format, at) = withPercentPlaceholders(s, placeholders)
@@ -280,8 +288,19 @@ internal fun Analyzer.checkInterpolateSite(
         opts,
         hyphenated,
         issues,
+        inHtml = inHtml,
     )
 }
+
+/**
+ * What the block's marks in an Html the placeholder form builds in a block of interpolate are: they may stand in element
+ * text alone. [reaches] where the Html is certainly written into the block's markup; [judgedHere] where the literal read
+ * is the one that judges them, and not the text of a Trusted the call reads in place, which the call judges.
+ */
+internal class MarksInHtml(
+    val reaches: Boolean,
+    val judgedHere: Boolean = true,
+)
 
 private const val TEXT_ONLY_ADVICE =
     "Hand the value to that placeholder form as one of its own values, at a %s placeholder, which judges it where it lands."
@@ -300,10 +319,11 @@ internal fun Analyzer.checkInterpolateBlock(
     hyphenated: Set<String>,
     // Whether the string is the value of a `val` of the block, which may go to the markup or to a log.
     valueOfVal: Boolean = false,
-    // Whether it is markup of an Html the placeholder form builds, where a marked value may stand in element text alone, and
-    // whether that Html is certainly written into the block's markup.
-    textOnly: Boolean = false,
-    reaches: Boolean = false,
+    // Where it is markup of an Html the placeholder form builds, whose marks may stand in element text alone.
+    inHtml: MarksInHtml? = null,
+    // Whether a template gives an Html of the placeholder form whose markup marks a value of the block: true where the mark
+    // is refused for certain, false where it may not be, a number's or one its own quote may move, null where none is marked.
+    held: (Interpolation) -> Boolean? = { null },
 ): List<Issue> {
     val all = s.interpolations.filter { markedValue(it) != null }
     val read =
@@ -312,11 +332,7 @@ internal fun Analyzer.checkInterpolateBlock(
             val start = src.indexOf(value, src.indexOf('+', ip.start) + 1)
             Arg(start, start + value.length, null, value, null)
         }
-    val facts = read.map { opts.fact(it.start, it.end) }
-    val told =
-        read.mapIndexed { k, it ->
-            if (facts[k].isOther()) null else facts[k].argKind() ?: argKind(src, it.text, it.text.startsWith("\""), s.start)
-        }
+    val told = all.mapIndexed { k, ip -> markKind(src, opts, ip, read[k].text, s.start) }
     // A + on a number is Kotlin's own and marks nothing: the number is written as it is, as from any template.
     val marks = all.indices.filter { told[it] != ArgKind.NUMBER }
     // A name set to a mark in the block, `val title = +name`, is the mark where it is written.
@@ -337,9 +353,41 @@ internal fun Analyzer.checkInterpolateBlock(
         ArrayList(),
         marks.map { all[it].start until all[it].end },
         valueOfVal,
-        textOnly,
-        reaches,
+        inHtml = inHtml,
+        held = held,
     )
+}
+
+/** What the value a template marks with `+`, [value], is as far as is known: null where it may be anything. */
+internal fun markKind(
+    src: String,
+    opts: Reading,
+    ip: Interpolation,
+    value: String,
+    at: Int,
+): ArgKind? {
+    val start = src.indexOf(value, src.indexOf('+', ip.start) + 1)
+    val fact = opts.fact(start, start + value.length)
+    return if (fact.isOther()) null else fact.argKind() ?: argKind(src, value, value.startsWith("\""), at)
+}
+
+/** The literal of [arg], `Trusted("...")` written whole, whose templates all mark a value: null for any other value. */
+internal fun Analyzer.markedTrustedLiteral(
+    src: String,
+    arg: Arg,
+): KotlinString? {
+    if (!coreCall(src, arg.text.trim(), "Trusted")) return null
+    val literal = nested(src).firstOrNull { it.start > arg.start && it.end <= arg.end } ?: return null
+    // The literal is the whole of Trusted's argument, a trailing comma after it as a formatter writes one.
+    if (src
+            .substring(literal.end, arg.end)
+            .trim()
+            .removePrefix(",")
+            .trim() != ")"
+    ) {
+        return null
+    }
+    return literal.takeIf { l -> l.interpolations.isNotEmpty() && l.interpolations.all { markedValue(it) != null } }
 }
 
 private fun setToMark(
@@ -381,10 +429,11 @@ private fun Analyzer.judgeInterpolated(
     spans: List<IntRange>? = null,
     // Whether the block's string is the value of a `val` of the block, which may go to the markup or to a log.
     valueOfVal: Boolean = false,
-    // Whether the block's string is markup of an Html the placeholder form builds, where a mark may stand in element text alone,
-    // and whether that Html is certainly written into the block's markup.
-    textOnly: Boolean = false,
-    reaches: Boolean = false,
+    // Where the string is markup of an Html the placeholder form builds in a block, or that form's format there, whose marks
+    // may stand in element text alone.
+    inHtml: MarksInHtml? = null,
+    // In a block, whether a template gives an Html of the placeholder form whose markup marks a value: see checkInterpolateBlock.
+    held: (Interpolation) -> Boolean? = { null },
 ): List<Issue> {
     val block = formatArg == null
     val view = markupView(src, format)
@@ -392,11 +441,15 @@ private fun Analyzer.judgeInterpolated(
     // interpolate reads the markup with each Trusted value's text in place: known where the value is a literal.
     val written = HashMap<Int, String>()
     val unknown = ArrayList<Int>()
+    // In a block, a Trusted's literal whose templates all mark a value is read in place too, each mark where it lands there.
+    val marked = HashMap<Int, KotlinString>()
     if (mapped) {
         for ((k, a) in values.withIndex()) {
             if (kinds[k] != ArgKind.TRUSTED) continue
             val text = trustedLiteral(src, a.text, s.start)
-            if (text == null) unknown += at[k] else written[format.interpolations.size + k] = text
+            val literal = if (text == null && inHtml != null) markedTrustedLiteral(src, a) else null
+            if (literal != null) marked[format.interpolations.size + k] = literal
+            if (text == null && literal == null) unknown += at[k] else written[format.interpolations.size + k] = text ?: literal!!.text
         }
     }
     val reading =
@@ -405,6 +458,7 @@ private fun Analyzer.judgeInterpolated(
             starts.map { it until it + PLACEHOLDER.length },
             prefixes ?: listOf(opts.prefix, CatalogNames.PREFIX, CatalogNames.ALIASED_PREFIX).distinct(),
             written,
+            marked.mapValues { (_, l) -> l.interpolations.map { it.decodedStart } },
         )
     val landings = reading.landings
     // After a Trusted whose text is not known, a value may land elsewhere than the markup shows.
@@ -413,6 +467,28 @@ private fun Analyzer.judgeInterpolated(
     // A fix that writes the literal anew writes every template of it, the marked ones too.
     val trapOf = traps(if (block) s else format, src)
     val attributeValues = ExpressionValues(view)
+
+    // What interpolate throws for a value marked in an Html the placeholder form builds, landing outside element text at [d].
+    fun textOnlyRefusal(
+        shown: String,
+        landing: ValueLanding,
+        d: Int,
+        range: IntRange,
+        certain: Boolean,
+    ): Issue {
+        val where =
+            if (landing.position in ESCAPED_POSITIONS) {
+                landing.attribute ?: "the markup"
+            } else {
+                landingWords(landing, endTagAt(view, d), rawElement(view, landing, d)).first
+            }
+        val message =
+            "interpolate ${if (certain) "throws" else "may throw"} here: $shown is marked in an Html the placeholder form " +
+                "builds, and lands in $where, outside element text. The block cannot know the data-* prefixes that Html is " +
+                "built with, so a value marked in it may stand in element text alone. $TEXT_ONLY_ADVICE"
+        val severity = if (certain) Severity.ERROR else Severity.WARNING
+        return Issue(range.first, range.last + 1, message, severity, IssueCode.UNSAFE_INTERPOLATION, valueLink(landing))
+    }
     for ((k, ip) in format.interpolations.withIndex()) {
         val landing = landings[k]
         val told = factOf(format, src, opts, ip)
@@ -426,6 +502,17 @@ private fun Analyzer.judgeInterpolated(
         }
         // Kotlin fills in the digits of an unsigned number before interpolate sees the markup, so it is a number here.
         if (fact.writesItself()) continue
+        // In a block, a template of the placeholder form's format that marks its value is the block's, which may stand in
+        // element text alone there. A number's + is Kotlin's own and marks nothing.
+        val mark = if (!block && inHtml != null) markedValue(ip) else null
+        if (mark != null) {
+            val kind = markKind(src, opts, ip, mark, s.start)
+            if (kind != ArgKind.NUMBER && landing.position != Position.TEXT) {
+                val certain = inHtml!!.reaches && kind != null && ip.decodedStart < uncertainFrom
+                issues += textOnlyRefusal(shortened(mark), landing, ip.decodedStart, ip.start until ip.end, certain)
+            }
+            continue
+        }
         if (fact.isNullable() && landing.position in ESCAPED_POSITIONS) continue
         // Markup in element text is safe as markup, but interpolate reads it as format: a %s in it is a placeholder.
         val markupText = fact.isMarkup() && landing.markupInPlace
@@ -446,7 +533,7 @@ private fun Analyzer.judgeInterpolated(
         // As a %s placeholder it would be refused, along with every value after it in the URL, unless the literal before it fixes the
         // host, and after a scheme the markup writes that does more than navigate.
         val loadsAnywhere = hostUnfixed(reading, starts, k) { j -> j == k || percentAt(j) }
-        val markRefused = textOnly && landing.position != Position.TEXT
+        val markRefused = block && inHtml != null && landing.position != Position.TEXT
         val fixable =
             landing.position in ESCAPED_POSITIONS && !loadsAnywhere && mapped && !markRefused &&
                 (ip.kind != InterpolationKind.OPERAND || (block && !ip.unread)) &&
@@ -513,6 +600,21 @@ private fun Analyzer.judgeInterpolated(
                     "$base It lands in $where. $instead"
                 }
             } + if (fixable && nullable) " Where $shown is null, interpolate writes nothing, and Kotlin writes null." else ""
+        // An Html written unmarked takes the marks in its own markup along, and the block reads them where it lands.
+        // Only in a quoted attribute value, where the Html is characters and its mark is refused, is the mark what helps.
+        val holds = if (block && (landing.position == Position.ATTRIBUTE || landing.position == Position.URL)) held(ip) else null
+        if (holds != null) {
+            val where =
+                landing.attribute
+                    ?: landingWords(landing, endTagAt(view, ip.decodedStart), rawElement(view, landing, ip.decodedStart)).first
+            val heldMessage =
+                "interpolate ${if (holds) "throws" else "may throw"} here: $shown is an Html that holds a value marked in it, which " +
+                    "may stand in element text alone, and it lands in $where. Mark it with +, and interpolate writes the Html " +
+                    "as any Html, its marked values in its own element text."
+            val severity = if (holds) Severity.ERROR else Severity.WARNING
+            issues += Issue(ip.start, ip.end, heldMessage, severity, IssueCode.UNSAFE_INTERPOLATION, valueLink(landing), fixes)
+            continue
+        }
         issues += Issue(ip.start, ip.end, message, Severity.WARNING, IssueCode.INTERPOLATE_TEMPLATE, valueLink(landing), fixes)
     }
     for ((k, d) in at.withIndex()) {
@@ -537,22 +639,13 @@ private fun Analyzer.judgeInterpolated(
         // Marked in an Html the placeholder form builds, a value may stand in element text alone: anywhere else interpolate
         // refuses it, whatever it is, since the block cannot know the prefixes that Html is built with. A number's + is
         // Kotlin's own and marks nothing, so where the value may be one, or the Html may not reach the markup, it may not.
-        if (textOnly && landing.position != Position.TEXT) {
-            val where =
-                if (landing.position in
-                    ESCAPED_POSITIONS
-                ) {
-                    landing.attribute ?: "the markup"
-                } else {
-                    landingWords(landing, endTagAt(view, d), rawElement(view, landing, d)).first
-                }
-            val certain = reaches && kind != null && !uncertain
-            val message =
-                "interpolate ${if (certain) "throws" else "may throw"} here: $shown is marked in an Html the placeholder form " +
-                    "builds, and lands in $where, outside element text. The block cannot know the data-* prefixes that Html is " +
-                    "built with, so a value marked in it may stand in element text alone. $TEXT_ONLY_ADVICE"
-            issues += refused(message, certain)
-            continue
+        if (block && inHtml != null) {
+            // The marks of a Trusted's literal the call reads in place are judged there, where they land.
+            if (!inHtml.judgedHere) continue
+            if (landing.position != Position.TEXT) {
+                issues += textOnlyRefusal(shown, landing, d, r, inHtml.reaches && kind != null && !uncertain)
+                continue
+            }
         }
         // interpolate refuses everything but Trusted in a URL that loads code, unless what comes before the
         // URL's first value nobody vouched for fixes its host: the markup as written, a literal Trusted's text
@@ -650,6 +743,23 @@ private fun Analyzer.judgeInterpolated(
                 }
             }
         issues += refused(message, kind != null && !uncertain, if (unsigned) listOf(toLongFix(arg!!)) else emptyList())
+    }
+    // The marks of a Trusted's literal read in place, each where it lands there; a number's + is Kotlin's own.
+    for ((j, literal) in marked) {
+        for ((n, m) in literal.interpolations.withIndex()) {
+            val value = markedValue(m)!!
+            val kind = markKind(src, opts, m, value, s.start)
+            val landing = reading.inner.getValue(j)[n]
+            if (kind == ArgKind.NUMBER || landing.position == Position.TEXT) continue
+            issues +=
+                textOnlyRefusal(
+                    shortened(value),
+                    landing,
+                    starts[j],
+                    m.start until m.end,
+                    inHtml!!.reaches && kind != null && starts[j] < uncertainFrom,
+                )
+        }
     }
     issues += mapIssues(format, src, analyzeHtml(view, opts, hyphenated, templates = false))
     return issues
@@ -865,9 +975,11 @@ private fun Analyzer.readValues(
     placeholders: List<IntRange>,
     prefixes: List<String>,
     known: Map<Int, String>,
+    // Where a known text holds placeholders of its own, by the placeholder whose text it is: each one's start in that text.
+    inner: Map<Int, List<Int>> = emptyMap(),
 ): ValueReading {
     val landings = valueLandings(view, placeholders, prefixes, known)
-    if (known.isEmpty()) return ValueReading(landings) { j, to -> view.substring(landings[j].valueStart, placeholders[to].first) }
+    if (known.isEmpty()) return ValueReading(landings, { j, to -> view.substring(landings[j].valueStart, placeholders[to].first) })
     val text = StringBuilder()
     var cut = 0
     val starts = IntArray(placeholders.size)
@@ -885,7 +997,20 @@ private fun Analyzer.readValues(
         lazy(LazyThreadSafetyMode.NONE) {
             valueLandings(markup, open.map { starts[it] until starts[it] + placeholders[it].last + 1 - placeholders[it].first }, prefixes)
         }
-    return ValueReading(landings) { j, to -> markup.substring(written.value[open.indexOf(j)].valueStart, starts[to]) }
+    val spans = inner.flatMap { (i, at) -> at.map { i to (starts[i] + it until starts[i] + it + PLACEHOLDER.length) } }
+    val read = if (spans.isEmpty()) emptyList() else valueLandings(markup, spans.map { it.second }, prefixes)
+    return ValueReading(
+        landings,
+        { j, to ->
+            markup.substring(
+                written.value[open.indexOf(j)].valueStart,
+                starts[to],
+            )
+        },
+        spans.indices.groupBy({
+            spans[it].first
+        }, { read[it] }),
+    )
 }
 
 /**

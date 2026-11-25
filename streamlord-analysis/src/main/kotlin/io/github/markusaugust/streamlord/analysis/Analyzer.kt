@@ -170,28 +170,33 @@ internal enum class ValueFact {
 /** The name of Trusted's argument written before it, `html = `. */
 private val NAMED_HTML = regex("""^\s*html\s*=""")
 
-/** What a literal opens with, a multi-dollar one's `$` among them. */
-private val LITERAL_OPENS = setOf('"', '$')
-
-/** The prefixes of an aliased bundle as interpolate takes them first: a list written out. */
-private val PREFIXES_WRITTEN = regex("""(?:listOf|mutableListOf|arrayListOf)\s*\(""")
-
 /**
- * A call of the placeholder form in [block], whose Html the block reads: its markup is the literal at [format] and the
- * text of each Trusted handed to it, at [trusted]. It judged its values with the block's marks unread, so a value marked
- * there may stand in element text alone. [written] where the Html is certainly written into the block's markup.
+ * A call of the placeholder form, [site], in [block], whose Html the block reads: its markup is its format, at [format],
+ * and the text of each Trusted handed to it, at [trusted]. It judged its values with the block's marks unread, so a value
+ * marked there may stand in element text alone. [marks] are those its markup holds, a call's handed to it among them;
+ * [givenAt] where a template of the block's markup is the call whole, which writes the Html there; [handedOn] where it is
+ * a value of a second call, which may escape it where it lands there, marks and all.
  */
 private class PlaceholderHtml(
+    val site: CallSite,
     val block: InterpolateBlock,
-    val format: Int?,
+    val format: IntRange?,
     val trusted: List<IntRange>,
-    val written: Boolean,
+    val marks: List<Interpolation>,
+    val givenAt: Int?,
+    val handedOn: Boolean,
+    /** Whether its markup writes a quote, which may end the attribute it lands in and put a mark in element text. */
+    val quotes: Boolean,
+    /** Where each literal starts that the call reads in place, a Trusted's of marks alone, judging its marks itself. */
+    val inPlace: Set<Int>,
 ) {
-    /** Whether [s], standing in the argument of a `Trusted(...)` at [inTrusted] if any, is of this Html's markup. */
-    fun holds(
-        s: KotlinString,
-        inTrusted: IntRange?,
-    ): Boolean = format == s.start || (inTrusted != null && trusted.any { inTrusted.first > it.first && inTrusted.last < it.last })
+    /** Whether a literal standing in the argument of a `Trusted(...)` at [inTrusted] is of this Html's markup. */
+    fun holds(inTrusted: IntRange?): Boolean =
+        inTrusted != null && !handedOn &&
+            (
+                trusted.any { inTrusted.first > it.first && inTrusted.last < it.last } ||
+                    format?.let { inTrusted.first > it.first && inTrusted.last < it.last } == true
+            )
 }
 
 private val CONSTANT_NAME = regex("""(?:^|\.)([A-Z]+)\s*$""")
@@ -391,6 +396,16 @@ public class Analyzer(
         return lex
     }
 
+    @Volatile
+    private var lastNested: Pair<KotlinLex, List<KotlinString>>? = null
+
+    /** Every literal of [src], those in a template's code among them, each before the ones inside it: read once per text. */
+    internal fun nested(src: String): List<KotlinString> {
+        val lex = lex(src)
+        lastNested?.let { if (it.first === lex) return it.second }
+        return withNested(lex.strings).also { lastNested = lex to it }
+    }
+
     /** The issues of a Kotlin file of which nothing more is known than its text. */
     public fun analyzeKotlin(src: String): List<Issue> = analyzeKotlin(Source(src, SourceLanguage.KOTLIN))
 
@@ -461,13 +476,6 @@ public class Analyzer(
         // An interpolate the file takes from elsewhere is not core's, whose format this reads; nor one it
         // declares, since the text cannot tell whether the call fits it.
         val otherInterpolate = shadowsCore(src, "interpolate")
-        for (site in findCallSites(src, INTERPOLATE, lex)) {
-            if (foreign(site.name, site.nameStart) || otherInterpolate) continue
-            val format = interpolateFormat(site, src) ?: continue
-            for (x in lex.stringsIn(format.second.start, format.second.end)) claimed += x.start
-            val issues = checkInterpolateSite(site, format.first, format.second, src, opts, hyphenated)
-            if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
-        }
         // The block form: every literal in the braces is markup interpolate reads, its marked values taken where they stand.
         val blocks =
             if (otherInterpolate) {
@@ -478,7 +486,27 @@ public class Analyzer(
                     facts.code,
                 ).filter { !foreign(it.site.name, it.site.nameStart) }
             }
-        val htmls = if (blocks.isEmpty()) emptyList() else placeholderHtmls(src, lex, facts.code, blocks)
+        // The placeholder form's calls, in a template's code too: `"<p>${interpolate("<b>%s</b>", name)}</p>"`.
+        val placeholderSites =
+            if (otherInterpolate) {
+                emptyList()
+            } else {
+                findCallSites(
+                    src,
+                    INTERPOLATE,
+                    KotlinLex(lex.strings, facts.code, lex.comments),
+                )
+            }
+        val htmls = if (blocks.isEmpty()) emptyList() else placeholderHtmls(src, facts.code, placeholderSites, blocks)
+        for (site in placeholderSites) {
+            if (foreign(site.name, site.nameStart)) continue
+            val format = interpolateFormat(site, src, facts.code) ?: continue
+            claimed += format.second.start
+            for (x in format.second.literals) claimed += x.start
+            val inHtml = htmls.firstOrNull { it.site === site }?.let { MarksInHtml(it.givenAt != null) }
+            val issues = checkInterpolateSite(site, format.first, format.second, src, opts, hyphenated, inHtml)
+            if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
+        }
         out += indicatorOrderIssues(src, lex, foreign)
         for (site in findCallSites(src, nonceCalls, lex)) {
             if (foreign(site.name, site.nameStart)) continue
@@ -519,7 +547,7 @@ public class Analyzer(
             // issues' site, so a host that resolves calls can say it is somebody else's.
             val trusted = facts.trustedAt(s.start)
             val innermost = blocks.lastOrNull { s.start in it.braces }
-            val html = innermost?.let { b -> htmls.firstOrNull { it.block === b && it.holds(s, trusted) } }
+            val html = innermost?.let { b -> htmls.firstOrNull { it.block === b && it.holds(trusted) } }
             val block = innermost?.takeUnless { html == null && inMarkedValue(src, lex.strings, s, it.braces, trusted) }
             if (block != null && (isHtmlString(src, s) || '<' in whole.text || whole.interpolations.any { markedValue(it) != null })) {
                 val issues =
@@ -531,8 +559,9 @@ public class Analyzer(
                         opts,
                         hyphenated,
                         facts.inBlockValue(s.start, block.braces),
-                        textOnly = html != null,
-                        reaches = html?.written == true,
+                        // A Trusted's literal of marks alone the call judges where it lands, its marks among its own values.
+                        html?.let { MarksInHtml(it.givenAt != null, judgedHere = s.start !in it.inPlace) },
+                        held = { ip -> htmls.firstOrNull { it.givenAt == ip.start }?.let { marksHeld(src, opts, it) } },
                     )
                 if (issues.isNotEmpty()) out += SiteIssues(block.site, whole, issues)
                 continue
@@ -791,49 +820,73 @@ public class Analyzer(
         }
     }
 
-    /**
-     * The calls of the placeholder form in [blocks], in their templates' code too, whose Html the block reads: not one
-     * handed on to a second, which may escape the Html where it lands there, marks and all.
-     */
+    /** Whether the marks [html]'s markup holds are a value of the block: true where one is no number, false where each may be, null for none. */
+    private fun marksHeld(
+        src: String,
+        opts: Reading,
+        html: PlaceholderHtml,
+    ): Boolean? {
+        var held: Boolean? = null
+        for (m in html.marks) {
+            when (markKind(src, opts, m, markedValue(m)!!, m.start)) {
+                ArgKind.NUMBER -> {}
+
+                null -> {
+                    if (held == null) held = false
+                }
+
+                else -> {
+                    return !html.quotes
+                }
+            }
+        }
+        return held
+    }
+
     private fun placeholderHtmls(
         src: String,
-        lex: KotlinLex,
         code: BooleanArray,
+        sites: List<CallSite>,
         blocks: List<InterpolateBlock>,
     ): List<PlaceholderHtml> {
-        val sites = findCallSites(src, INTERPOLATE, KotlinLex(lex.strings, code, lex.comments)).filter { !it.trailingLambda }
-        val templates = withNested(lex.strings).flatMap { it.interpolations }
-        return sites.mapNotNull { site ->
+        val calls = sites.filter { !it.trailingLambda }
+        val strings = nested(src)
+        val templates = strings.flatMap { it.interpolations }
+        return calls.mapNotNull { site ->
             val block = blocks.lastOrNull { site.nameStart in it.braces } ?: return@mapNotNull null
-            if (sites.any {
-                    it !== site && it.openParen > block.braces.first && it.openParen < site.nameStart &&
-                        site.closeParen < it.closeParen
-                }
-            ) {
-                return@mapNotNull null
-            }
-            // The prefixes of an aliased bundle may come first, as a list; the format is the first literal. A call in a
-            // template's code holds literals the lexer gives no argument, so an argument is read by its first character.
-            val positional = site.positional
-            val first =
-                positional
-                    .firstOrNull()
-                    ?.text
-                    ?.trimStart()
-                    .orEmpty()
-            val format =
-                site.named("format") ?: when {
-                    first.firstOrNull() in LITERAL_OPENS -> positional[0]
-                    PREFIXES_WRITTEN.matchesAt(first, 0) -> positional.getOrNull(1)
-                    else -> null
+            val handedOn =
+                calls.any {
+                    it !== site && it.openParen > block.braces.first && it.openParen < site.nameStart && site.closeParen < it.closeParen
                 }
             val call = src.substring(site.nameStart, site.closeParen + 1)
+            val format = interpolateFormat(site, src, code)?.second
+            val trusted = site.positional.filter { coreCall(src, it.text, "Trusted") }.map { it.start until it.end }
+            // Its markup's marks, and those of a call handed to it, whose Html its own then holds.
+            val markup =
+                strings.filter { l ->
+                    l.start > site.openParen && l.end <= site.closeParen &&
+                        (
+                            format?.let { l.start >= it.start && l.end <= it.end } == true ||
+                                trusted.any { l.start > it.first && l.end <= it.last + 1 } ||
+                                calls.any {
+                                    it !== site && it.openParen > site.openParen && it.closeParen < site.closeParen &&
+                                        l.start > it.openParen &&
+                                        l.end <= it.closeParen
+                                }
+                        )
+                }
             PlaceholderHtml(
+                site,
                 block,
-                format?.start,
-                positional.filter { coreCall(src, it.text, "Trusted") }.map { it.start until it.end },
+                format?.let { it.start until it.end },
+                trusted,
+                markup.flatMap { l -> l.interpolations.filter { markedValue(it) != null } },
                 // The whole of a template of the block's markup, marked or not, rather than kept, measured or handed elsewhere.
-                templates.any { it.start in block.braces && (markedValue(it) ?: it.text.trim()) == call },
+                templates.firstOrNull { site.nameStart in it.start until it.end && (markedValue(it) ?: it.text.trim()) == call }?.start,
+                handedOn,
+                markup.any { l -> '"' in l.text || '\'' in l.text },
+                // Read only where the call is judged, which a format the text cannot read rules out.
+                if (format == null) emptySet() else site.positional.mapNotNullTo(HashSet()) { markedTrustedLiteral(src, it)?.start },
             )
         }
     }
