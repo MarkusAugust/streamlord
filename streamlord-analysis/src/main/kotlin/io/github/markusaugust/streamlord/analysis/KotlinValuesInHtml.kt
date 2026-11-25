@@ -283,6 +283,9 @@ internal fun Analyzer.checkInterpolateSite(
     )
 }
 
+private const val TEXT_ONLY_ADVICE =
+    "Hand the value to that placeholder form as one of its own values, at a %s placeholder, which judges it where it lands."
+
 /**
  * The block form, `interpolate { "<p>${+name}</p>" }`: a template that opens with `+` is a value interpolate takes where it
  * stands, judged as the value of a `%s` there is; any other template Kotlin fills in before interpolate sees the markup.
@@ -297,6 +300,10 @@ internal fun Analyzer.checkInterpolateBlock(
     hyphenated: Set<String>,
     // Whether the string is the value of a `val` of the block, which may go to the markup or to a log.
     valueOfVal: Boolean = false,
+    // Whether it is markup of an Html the placeholder form builds, where a marked value may stand in element text alone, and
+    // whether that Html is certainly written into the block's markup.
+    textOnly: Boolean = false,
+    reaches: Boolean = false,
 ): List<Issue> {
     val all = s.interpolations.filter { markedValue(it) != null }
     val read =
@@ -330,6 +337,8 @@ internal fun Analyzer.checkInterpolateBlock(
         ArrayList(),
         marks.map { all[it].start until all[it].end },
         valueOfVal,
+        textOnly,
+        reaches,
     )
 }
 
@@ -372,6 +381,10 @@ private fun Analyzer.judgeInterpolated(
     spans: List<IntRange>? = null,
     // Whether the block's string is the value of a `val` of the block, which may go to the markup or to a log.
     valueOfVal: Boolean = false,
+    // Whether the block's string is markup of an Html the placeholder form builds, where a mark may stand in element text alone,
+    // and whether that Html is certainly written into the block's markup.
+    textOnly: Boolean = false,
+    reaches: Boolean = false,
 ): List<Issue> {
     val block = formatArg == null
     val view = markupView(src, format)
@@ -433,8 +446,9 @@ private fun Analyzer.judgeInterpolated(
         // As a %s placeholder it would be refused, along with every value after it in the URL, unless the literal before it fixes the
         // host, and after a scheme the markup writes that does more than navigate.
         val loadsAnywhere = hostUnfixed(reading, starts, k) { j -> j == k || percentAt(j) }
+        val markRefused = textOnly && landing.position != Position.TEXT
         val fixable =
-            landing.position in ESCAPED_POSITIONS && !loadsAnywhere && mapped &&
+            landing.position in ESCAPED_POSITIONS && !loadsAnywhere && mapped && !markRefused &&
                 (ip.kind != InterpolationKind.OPERAND || (block && !ip.unread)) &&
                 percents % 2 == 0 && keeps && runningScheme(reading, starts, k) == null
         // Under trimIndent the trim now runs before the value goes in, so a line break in it is no longer trimmed.
@@ -471,6 +485,11 @@ private fun Analyzer.judgeInterpolated(
                     "Kotlin fills in $shown before interpolate reads the markup, so interpolate reads what it holds as markup too: " +
                         "a %s in it is a placeholder and a %% a per cent sign, and interpolate throws or changes the markup. " +
                         "Make it a %s placeholder and pass the Html: interpolate writes an Html or a Trusted there as it is."
+                }
+
+                landing.position in ESCAPED_POSITIONS && markRefused -> {
+                    "$base Marked, it would stand in an Html the placeholder form builds, outside element text, where " +
+                        "interpolate refuses a marked value. $TEXT_ONLY_ADVICE"
                 }
 
                 landing.position in ESCAPED_POSITIONS -> {
@@ -514,6 +533,26 @@ private fun Analyzer.judgeInterpolated(
         ): Issue {
             val severity = if (certain) Severity.ERROR else Severity.WARNING
             return Issue(r.first, r.last + 1, message, severity, IssueCode.UNSAFE_INTERPOLATION, valueLink(landing), fixes)
+        }
+        // Marked in an Html the placeholder form builds, a value may stand in element text alone: anywhere else interpolate
+        // refuses it, whatever it is, since the block cannot know the prefixes that Html is built with. A number's + is
+        // Kotlin's own and marks nothing, so where the value may be one, or the Html may not reach the markup, it may not.
+        if (textOnly && landing.position != Position.TEXT) {
+            val where =
+                if (landing.position in
+                    ESCAPED_POSITIONS
+                ) {
+                    landing.attribute ?: "the markup"
+                } else {
+                    landingWords(landing, endTagAt(view, d), rawElement(view, landing, d)).first
+                }
+            val certain = reaches && kind != null && !uncertain
+            val message =
+                "interpolate ${if (certain) "throws" else "may throw"} here: $shown is marked in an Html the placeholder form " +
+                    "builds, and lands in $where, outside element text. The block cannot know the data-* prefixes that Html is " +
+                    "built with, so a value marked in it may stand in element text alone. $TEXT_ONLY_ADVICE"
+            issues += refused(message, certain)
+            continue
         }
         // interpolate refuses everything but Trusted in a URL that loads code, unless what comes before the
         // URL's first value nobody vouched for fixes its host: the markup as written, a literal Trusted's text

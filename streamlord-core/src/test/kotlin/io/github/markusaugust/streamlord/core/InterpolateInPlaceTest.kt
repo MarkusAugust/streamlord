@@ -4,6 +4,7 @@ import io.github.markusaugust.streamlord.core.domain.Position
 import io.github.markusaugust.streamlord.core.domain.Trusted
 import io.github.markusaugust.streamlord.core.domain.UnsafeInterpolationException
 import io.github.markusaugust.streamlord.core.domain.interpolate
+import io.github.markusaugust.streamlord.core.domain.joinToHtml
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.coroutines.startCoroutine
@@ -14,6 +15,7 @@ import kotlin.test.assertFailsWith
 /** The block form of interpolate: each value marked with `+` where it stands, and judged there as a `%s` is. */
 private const val MARK_OPENS = '\uFDD0'
 private const val MARK_CLOSES = '\uFDD1'
+private const val MARK_IN_HTML = '\uFDD2'
 private const val REPLACED = '\uFFFD'
 
 class InterpolateInPlaceTest {
@@ -175,9 +177,11 @@ class InterpolateInPlaceTest {
                 interpolate { "<p>${+"value"}</p>".uppercase() }.text,
                 interpolate { "<p>${MARK_OPENS}0$MARK_CLOSES</p>${+"value"}" }.text,
                 interpolate { "<p>$MARK_CLOSES</p>" }.text,
+                interpolate { "<p>${MARK_IN_HTML}0$MARK_CLOSES</p>${+"a${MARK_IN_HTML}b"}" }.text,
+                interpolate("<p>%s</p>", "a${MARK_IN_HTML}b").text,
             )
         for (out in shapes) {
-            assertEquals(false, MARK_OPENS in out || MARK_CLOSES in out, out)
+            assertEquals(false, MARK_OPENS in out || MARK_IN_HTML in out || MARK_CLOSES in out, out)
             assertEquals(true, REPLACED in out, out)
         }
         assertEquals("<p>${REPLACED}0$REPLACED</p>value", shapes[3])
@@ -283,7 +287,7 @@ class InterpolateInPlaceTest {
             assertFailsWith<UnsafeInterpolationException> {
                 interpolate { "<p>${+"a"}${+interpolate("%s", Trusted("<b onclick=\"${+n}\">x</b>"))}</p>" }
             }
-        assertEquals(Position.STRUCTURE to 2, refused.position to refused.index)
+        assertEquals(Position.CODE to 2, refused.position to refused.index)
         // An Html inside thousands is read without overflowing the stack.
         val deep =
             interpolate {
@@ -340,6 +344,57 @@ class InterpolateInPlaceTest {
         // A tag name keeps its own message.
         val tag = assertFailsWith<UnsafeInterpolationException> { interpolate("<%s>x", "b") }.message.orEmpty()
         assertEquals(true, "Html" !in tag, tag)
+    }
+
+    @Test
+    fun `an Html written unmarked keeps the rules of one marked, so no mark in it moves the values it was judged with`() {
+        val user = "');alert(1);('"
+        // The placeholder form escaped the second value for element text: markup a mark brings cannot move it into a script.
+        assertEquals(
+            "<div>&lt;script&gt;alert(1)//</div>",
+            interpolate { "<div>${interpolate("%s%s", Trusted("${+Trusted("<script>")}"), "alert(1)//")}</div>" }.text,
+        )
+        assertEquals(
+            "<div>&lt;script&gt;alert(1)//</div>",
+            interpolate { "<div>${interpolate("${+Trusted("<script>")}%s", "alert(1)//")}</div>" }.text,
+        )
+        // Nor may a value marked in it land anywhere but its element text, since its prefixes are not the block's to know.
+        val pages =
+            listOf(
+                { interpolate { "<p>${interpolate(listOf("x-"), "<b x-on:click=\"%s\">b</b>", Trusted("${+user}"))}</p>" } },
+                { interpolate { "<p>${interpolate("<b x-on:click=\"${+user}\">%s</b>", "b")}</p>" } },
+                { interpolate { "<p>${listOf(interpolate("<b title=\"${+user}\">b</b>")).joinToHtml()}</p>" } },
+            )
+        for (page in pages) {
+            val refused = assertFailsWith<UnsafeInterpolationException> { page() }
+            assertEquals(Position.STRUCTURE, refused.position)
+            val message = refused.message.orEmpty()
+            assertEquals(true, "prefixes" in message && "placeholder form built" in message, message)
+        }
+        // A Trusted marked there is markup where an Html would be, the block's marks in it in element text alone too, and
+        // counted where they stand.
+        assertEquals(
+            "<p><b><i>&lt;n&gt;</i></b></p>",
+            interpolate { "<p>${interpolate("<b>${+Trusted("<i>${+"<n>"}</i>")}</b>")}</p>" }.text,
+        )
+        assertFailsWith<UnsafeInterpolationException> {
+            interpolate { "<p>${interpolate("<b>${+Trusted("<i title=\"${+"n"}\">i</i>")}</b>")}</p>" }
+        }
+        val counted =
+            assertFailsWith<UnsafeInterpolationException> {
+                interpolate { "<p>${interpolate("${+Trusted("${+"a"}")}<b title=\"${+"t"}\">b</b>")}</p>" }
+            }
+        assertEquals(Position.STRUCTURE to 2, counted.position to counted.index)
+        // Where no value is let in, the refusal says so as it would of any value.
+        val script = assertFailsWith<UnsafeInterpolationException> { interpolate { "<p>${interpolate("<script>${+"x"}</script>")}</p>" } }
+        assertEquals(Position.CODE, script.position)
+        // In its element text a value is escaped, and an Html is written as any Html is.
+        assertEquals(
+            "<ul><li>&lt;x&gt;</li><li><b>b</b></li></ul>",
+            interpolate {
+                "<ul>${listOf(interpolate("<li>${+"<x>"}</li>"), interpolate("<li>${+interpolate("<b>b</b>")}</li>")).joinToHtml()}</ul>"
+            }.text,
+        )
     }
 
     @Test
