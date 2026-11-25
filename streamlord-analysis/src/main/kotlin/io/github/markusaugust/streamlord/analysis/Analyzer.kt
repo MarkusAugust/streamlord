@@ -170,6 +170,30 @@ internal enum class ValueFact {
 /** The name of Trusted's argument written before it, `html = `. */
 private val NAMED_HTML = regex("""^\s*html\s*=""")
 
+/** What a literal opens with, a multi-dollar one's `$` among them. */
+private val LITERAL_OPENS = setOf('"', '$')
+
+/** The prefixes of an aliased bundle as interpolate takes them first: a list written out. */
+private val PREFIXES_WRITTEN = regex("""(?:listOf|mutableListOf|arrayListOf)\s*\(""")
+
+/**
+ * A call of the placeholder form in [block], whose Html the block reads: its markup is the literal at [format] and the
+ * text of each Trusted handed to it, at [trusted]. It judged its values with the block's marks unread, so a value marked
+ * there may stand in element text alone. [written] where the Html is certainly written into the block's markup.
+ */
+private class PlaceholderHtml(
+    val block: InterpolateBlock,
+    val format: Int?,
+    val trusted: List<IntRange>,
+    val written: Boolean,
+) {
+    /** Whether [s], standing in the argument of a `Trusted(...)` at [inTrusted] if any, is of this Html's markup. */
+    fun holds(
+        s: KotlinString,
+        inTrusted: IntRange?,
+    ): Boolean = format == s.start || (inTrusted != null && trusted.any { inTrusted.first > it.first && inTrusted.last < it.last })
+}
+
 private val CONSTANT_NAME = regex("""(?:^|\.)([A-Z]+)\s*$""")
 
 /** The constant [arg] names, `APPEND` of `ElementPatchMode.APPEND` or of an imported `APPEND`; null for a value the code computes. */
@@ -454,6 +478,7 @@ public class Analyzer(
                     facts.code,
                 ).filter { !foreign(it.site.name, it.site.nameStart) }
             }
+        val htmls = if (blocks.isEmpty()) emptyList() else placeholderHtmls(src, lex, facts.code, blocks)
         out += indicatorOrderIssues(src, lex, foreign)
         for (site in findCallSites(src, nonceCalls, lex)) {
             if (foreign(site.name, site.nameStart)) continue
@@ -493,7 +518,9 @@ public class Analyzer(
             // The innermost block a literal stands in reads it, where it is markup or marks a value: its call is the
             // issues' site, so a host that resolves calls can say it is somebody else's.
             val trusted = facts.trustedAt(s.start)
-            val block = blocks.lastOrNull { s.start in it.braces }?.takeUnless { inMarkedValue(src, lex.strings, s, it.braces, trusted) }
+            val innermost = blocks.lastOrNull { s.start in it.braces }
+            val html = innermost?.let { b -> htmls.firstOrNull { it.block === b && it.holds(s, trusted) } }
+            val block = innermost?.takeUnless { html == null && inMarkedValue(src, lex.strings, s, it.braces, trusted) }
             if (block != null && (isHtmlString(src, s) || '<' in whole.text || whole.interpolations.any { markedValue(it) != null })) {
                 val issues =
                     checkInterpolateBlock(
@@ -504,6 +531,8 @@ public class Analyzer(
                         opts,
                         hyphenated,
                         facts.inBlockValue(s.start, block.braces),
+                        textOnly = html != null,
+                        reaches = html?.written == true,
                     )
                 if (issues.isNotEmpty()) out += SiteIssues(block.site, whole, issues)
                 continue
@@ -759,6 +788,53 @@ public class Analyzer(
                     val marked = markedValue(ip)
                     ip.start <= s.start && s.end <= ip.end && marked != null && (argument == null || !givesTrusted(marked))
                 }
+        }
+    }
+
+    /**
+     * The calls of the placeholder form in [blocks], in their templates' code too, whose Html the block reads: not one
+     * handed on to a second, which may escape the Html where it lands there, marks and all.
+     */
+    private fun placeholderHtmls(
+        src: String,
+        lex: KotlinLex,
+        code: BooleanArray,
+        blocks: List<InterpolateBlock>,
+    ): List<PlaceholderHtml> {
+        val sites = findCallSites(src, INTERPOLATE, KotlinLex(lex.strings, code, lex.comments)).filter { !it.trailingLambda }
+        val templates = withNested(lex.strings).flatMap { it.interpolations }
+        return sites.mapNotNull { site ->
+            val block = blocks.lastOrNull { site.nameStart in it.braces } ?: return@mapNotNull null
+            if (sites.any {
+                    it !== site && it.openParen > block.braces.first && it.openParen < site.nameStart &&
+                        site.closeParen < it.closeParen
+                }
+            ) {
+                return@mapNotNull null
+            }
+            // The prefixes of an aliased bundle may come first, as a list; the format is the first literal. A call in a
+            // template's code holds literals the lexer gives no argument, so an argument is read by its first character.
+            val positional = site.positional
+            val first =
+                positional
+                    .firstOrNull()
+                    ?.text
+                    ?.trimStart()
+                    .orEmpty()
+            val format =
+                site.named("format") ?: when {
+                    first.firstOrNull() in LITERAL_OPENS -> positional[0]
+                    PREFIXES_WRITTEN.matchesAt(first, 0) -> positional.getOrNull(1)
+                    else -> null
+                }
+            val call = src.substring(site.nameStart, site.closeParen + 1)
+            PlaceholderHtml(
+                block,
+                format?.start,
+                positional.filter { coreCall(src, it.text, "Trusted") }.map { it.start until it.end },
+                // The whole of a template of the block's markup, marked or not, rather than kept, measured or handed elsewhere.
+                templates.any { it.start in block.braces && (markedValue(it) ?: it.text.trim()) == call },
+            )
         }
     }
 

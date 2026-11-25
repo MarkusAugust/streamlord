@@ -108,8 +108,8 @@ public enum class Position {
 
     /**
      * A tag name, an attribute name, or an unquoted value: the shape of the markup itself. Also anywhere
-     * but element text in an [Html] the block form of [interpolate] is handed marked, whose `data-*`
-     * prefixes it cannot know.
+     * but element text for a value the block form of [interpolate] marked in an [Html] the placeholder
+     * form built, whose `data-*` prefixes the block cannot know.
      */
     STRUCTURE,
 
@@ -146,8 +146,8 @@ public class UnsafeInterpolationException private constructor(
 
     internal companion object {
         /**
-         * A value marked in an [Html] the block form is handed marked, landing anywhere but that Html's element text: the
-         * block cannot know the prefixes the Html was built with, so it cannot judge the place.
+         * A value marked in an [Html] the placeholder form built, landing anywhere but element text: the block cannot know
+         * the prefixes the Html was built with, so it cannot judge the place.
          */
         fun outsideHtmlText(
             index: Int,
@@ -158,10 +158,11 @@ public class UnsafeInterpolationException private constructor(
                 index,
                 attribute,
                 false,
-                "Value $index would land ${attribute?.let { "in $it" } ?: "outside the element text"} of an Html handed to " +
-                    "the block marked. The block cannot know the data-* prefixes that Html was built with, so a value marked " +
-                    "in it may stand in its element text alone. Hand the value to the placeholder form that builds the Html " +
-                    "as one of its own values, interpolate(\"...%s...\", value), which judges it where it lands.",
+                "Value $index is marked in an Html the placeholder form built, and would land " +
+                    "${attribute?.let { "in $it" } ?: "outside element text"}. The block cannot know the data-* prefixes that " +
+                    "Html was built with, so a value marked in it may stand in element text alone. Hand the value to the " +
+                    "placeholder form that builds the Html as one of its own values, interpolate(\"...%s...\", value), which " +
+                    "judges it where it lands.",
             )
 
         private fun message(
@@ -325,11 +326,13 @@ public fun interpolate(
  * it yet: a trim call on the string runs before the values are in, and a `%` in it is one. A mark
  * may stand in a loop or be written twice. An [Html] is marked like any value and written as
  * [interpolate] writes it. A [Trusted] is markup the block reads in place, marked or not: a value
- * marked in its text is the block's, `+Trusted("Hi <i>${+name}</i>")`. So is one in the text of a
- * Trusted handed to the placeholder form, `+interpolate("%s", Trusted(...))`: it is escaped where it
- * lands in that Html's element text, which is then written as any Html is. Anywhere else in it the
- * value is refused, since the block cannot know the prefixes that Html was judged with; a Trusted
- * marked there is its text, escaped, since the placeholder form judged its other values without it.
+ * marked in its text is the block's, `+Trusted("Hi <i>${+name}</i>")`. So is one in an Html the
+ * placeholder form built, in its markup or in the text of a Trusted handed to it,
+ * `interpolate("%s", Trusted(...))`, marked or not: it is escaped where it lands in element text,
+ * and a marked Html is written as any Html is. Anywhere else the value is refused, since the block
+ * cannot know the prefixes that Html was judged with. A Trusted marked there is built as an Html is,
+ * the values marked in it standing in element text alone too, and is markup only where an Html would
+ * be, since the placeholder form judged its other values without it.
  *
  * A value written without the mark is filled in by Kotlin before this function sees the string: it
  * is markup as written, neither escaped nor refused, which is right for a constant and for markup
@@ -339,7 +342,7 @@ public fun interpolate(
  *
  * A mark is its own block's: written in another block, a nested one or a later one, it is no mark,
  * and neither is one in a string cut or changed after its values were marked. No value stands
- * there then, and the two characters a mark is made of are written as U+FFFD, as they are wherever
+ * there then, and the characters a mark is made of are written as U+FFFD, as they are wherever
  * else the string holds them: text that reaches the block through another escaper never stops the
  * page. Trim the string, and do nothing else to it. A block marks its values from one thread at a
  * time.
@@ -382,18 +385,19 @@ public class InterpolationScope
             // How many marks stand before the one read, a Trusted's and an Html's among them: what a refusal calls a value.
             var marks = 0
             // A Trusted is markup, so the marks in its text are the block's as the markup's are: its text waits on the
-            // reading stack of the piece it stands in. An Html that holds a mark's character has it from text its author
-            // wrote, a Trusted's or the format's, since a value never brings one: it is a piece of its own on the building
-            // stack, its marks resolved in its own markup, where the placeholder form judged its other values, and the Html
-            // its markup builds is written as any Html is. Neither stack is the call stack, so one inside thousands costs
-            // none; each text resolves only the marks made before its own.
+            // reading stack of the piece it stands in. The placeholder form writes a mark into its Html as one that stands
+            // in element text alone, since it judged its other values with the mark unread, and that holds whether the
+            // block is handed the Html marked or reads its text unmarked. Marked, an Html that holds a mark's character is
+            // a piece of its own on the building stack, its marks resolved in its own markup, and the Html its markup
+            // builds is written as any Html is. Neither stack is the call stack, so one inside thousands costs none; each
+            // text resolves only the marks made before its own.
             val building = ArrayDeque(listOf(MarkupToBuild(MarkupToRead(markup, marked.size))))
             while (true) {
                 val b = building.last()
                 val r = b.reading.lastOrNull()
                 if (r == null) {
                     // Read to its end, a piece is built, and is the value its mark stands for in the piece it was marked in.
-                    val html = interpolated(b.format.toString(), b.values, prefixes, b.numbers, textOnly = b.inHtml)
+                    val html = interpolated(b.format.toString(), b.values, prefixes, b.numbers, b.textOnly)
                     building.removeLast()
                     if (building.isEmpty()) return html
                     building.last().values += html
@@ -406,42 +410,56 @@ public class InterpolationScope
                 }
                 val c = text[r.at++]
                 if (c == '%') b.format.append('%')
-                if (c != MARK_OPENS && c != MARK_CLOSES) {
+                if (c != MARK_OPENS && c != MARK_IN_HTML && c != MARK_CLOSES) {
                     b.format.append(c)
                     continue
                 }
-                // A mark is read no further than a mark is long, so a stray opening costs nothing.
-                val close = text.indexOf(MARK_CLOSES, r.at).takeIf { c == MARK_OPENS && it >= 0 && it - r.at <= MARK_LENGTH } ?: -1
-                val index =
-                    if (close < 0 || !text.startsWith("$id.", r.at)) null else text.substring(r.at + id.length + 1, close).toIntOrNull()
+                val close = if (c == MARK_CLOSES) -1 else markEnd(r)
                 // No mark of this block: its character stands for nothing, and what follows it is read as markup.
-                if (index == null || index !in 0 until r.below) {
+                if (close < 0) {
                     b.format.append(REPLACEMENT)
                     continue
                 }
+                val index = text.substring(r.at + id.length + 1, close).toInt()
                 r.at = close + 1
                 val value = marked[index]
                 val mark = marks++
+                val inHtml = c == MARK_IN_HTML || b.inHtml
+                if (value is Trusted && !inHtml) {
+                    b.reading.addLast(MarkupToRead(value.html, index))
+                    continue
+                }
+                b.format.append("%s")
+                b.numbers += mark
+                if (inHtml) b.textOnly += b.values.size
                 when {
-                    value is Trusted && !b.inHtml -> {
-                        b.reading.addLast(MarkupToRead(value.html, index))
+                    // Markup a mark brings into an Html could move the values the placeholder form judged there: a Trusted
+                    // is built as an Html is, its own marks standing in element text alone, and written as any Html is.
+                    value is Trusted -> {
+                        building.addLast(MarkupToBuild(MarkupToRead(value.html, index), inHtml = true))
                     }
 
-                    value is Html && (MARK_OPENS in value.text || MARK_CLOSES in value.text) -> {
-                        b.format.append("%s")
-                        b.numbers += mark
-                        building.addLast(MarkupToBuild(MarkupToRead(value.text, index), inHtml = true))
+                    value is Html && value.text.any { it == MARK_OPENS || it == MARK_IN_HTML || it == MARK_CLOSES } -> {
+                        building.addLast(MarkupToBuild(MarkupToRead(value.text, index)))
                     }
 
                     else -> {
-                        b.format.append("%s")
-                        // The placeholder form judged the values in an Html with its marks unread, so markup a mark brings there
-                        // could move them: a Trusted is its text, escaped where it lands.
-                        b.values += if (value is Trusted) value.html else value
-                        b.numbers += mark
+                        b.values += value
                     }
                 }
             }
+        }
+
+        /**
+         * Where the mark that opens just before [r]'s place ends, if it is one of this block's made before [r]'s text: -1 where
+         * it is none. A mark is read no further than a mark is long, so a stray opening costs nothing.
+         */
+        private fun markEnd(r: MarkupToRead): Int {
+            val text = r.text
+            val close = text.indexOf(MARK_CLOSES, r.at).takeIf { it >= 0 && it - r.at <= MARK_LENGTH } ?: return -1
+            if (!text.startsWith("$id.", r.at)) return -1
+            val index = text.substring(r.at + id.length + 1, close).toIntOrNull() ?: return -1
+            return if (index in 0 until r.below) close else -1
         }
     }
 
@@ -453,10 +471,10 @@ public value class Placed internal constructor(
     override fun toString(): String = mark
 }
 
-/** One piece of markup the block form of [interpolate] builds, the block's or a marked Html's. */
+/** One piece of markup the block form of [interpolate] builds: the block's, a marked Html's, or a Trusted's marked in one. */
 private class MarkupToBuild(
     first: MarkupToRead,
-    /** Whether it is an Html's, whose values were judged before its marks were read. */
+    /** Whether it is a Trusted's marked in an Html, where each of its own marks stands in element text alone too. */
     val inHtml: Boolean = false,
 ) {
     val format = StringBuilder(first.text.length + 16)
@@ -464,6 +482,9 @@ private class MarkupToBuild(
 
     /** For each value, how many marks stand before it in the block's markup: what a refusal calls it. */
     val numbers = ArrayList<Int>()
+
+    /** By their index in [values], those whose marks the placeholder form wrote into an Html: they may land in element text alone. */
+    val textOnly = HashSet<Int>()
 
     /** Its markup and the texts of the Trusted values marked in it, the one read last first. */
     val reading = ArrayDeque(listOf(first))
@@ -477,11 +498,14 @@ private class MarkupToRead(
     var at = 0
 }
 
-// Two characters Unicode sets aside for a program's own use and no text may hold, around the block's own id and the
+// Characters Unicode sets aside for a program's own use and no text may hold, around the block's own id and the
 // value's number. A value never brings one into the markup: where one is escaped they are written as U+FFFD.
 private const val REPLACEMENT = '\uFFFD'
 private const val MARK_OPENS = '\uFDD0'
 private const val MARK_CLOSES = '\uFDD1'
+
+// What a mark opens with once the placeholder form has written it into an Html.
+private const val MARK_IN_HTML = '\uFDD2'
 private const val MARK_RADIX = 36
 private const val MARK_LENGTH = 24
 
@@ -491,9 +515,9 @@ private fun interpolated(
     prefixes: List<String>,
     // What a refusal calls each value: its place among the values, or among the marks of the block form.
     numbers: List<Int> = values.indices.toList(),
-    // Whether the values may land in element text alone: the marks of an Html the block form rebuilds, whose prefixes it
-    // cannot know.
-    textOnly: Boolean = false,
+    // The values that may land in element text alone: the marks the placeholder form wrote into an Html, whose prefixes
+    // the block form cannot know.
+    textOnly: Set<Int> = emptySet(),
 ): Html {
     val placeholders = placeholders(format)
     require(placeholders.size == values.size) {
@@ -507,7 +531,7 @@ private fun interpolated(
         "The markup has ${placeholders.size} %s ${if (placeholders.size == 1) "placeholder" else "placeholders"} and ${values.size} " +
             "${if (values.size == 1) "value was" else "values were"} given$spread"
     }
-    if (placeholders.isEmpty()) return Html(format.replace("%%", "%"))
+    if (placeholders.isEmpty()) return built(format.replace("%%", "%"))
 
     // A Trusted value is markup: it is read in place, and the other values are judged where its text puts them.
     val known = HashMap<Int, String>()
@@ -529,17 +553,22 @@ private fun interpolated(
         if (value is Html && landing.markupInPlace && landscapes.all { it.closes(value.text, placeholder) }) {
             out.append(value.text)
         } else {
-            if (textOnly && landing.position != Position.TEXT) {
+            if (!landing.position.admits(value)) throw UnsafeInterpolationException(landing.position, numbers[index], landing.attribute)
+            if (index in textOnly && landing.position != Position.TEXT) {
                 throw UnsafeInterpolationException.outsideHtmlText(numbers[index], landing.attribute)
             }
-            if (!landing.position.admits(value)) throw UnsafeInterpolationException(landing.position, numbers[index], landing.attribute)
             out.escaped(value)
         }
     }
     out.append(text, cut, text.length)
     for (landscape in landscapes) landscape.checkUrls(text, written.starts.asList(), values, numbers)
-    return Html(out.toString())
+    return built(out.toString())
 }
+
+// The values were judged with each mark of a block in the markup unread, as text standing for nothing, so a mark is
+// written as one the block reads as standing in element text alone.
+@OptIn(InternalStreamlordApi::class)
+private fun built(markup: String): Html = Html(markup.replace(MARK_OPENS, MARK_IN_HTML))
 
 /**
  * Markup as it will be written, as far as that is known before the values are escaped: each placeholder
@@ -687,7 +716,7 @@ private fun StringBuilder.escaped(value: Any?) {
             '>' -> append("&gt;")
             '"' -> append("&quot;")
             '\'' -> append("&#39;")
-            MARK_OPENS, MARK_CLOSES -> append(REPLACEMENT)
+            MARK_OPENS, MARK_IN_HTML, MARK_CLOSES -> append(REPLACEMENT)
             else -> append(ch)
         }
     }

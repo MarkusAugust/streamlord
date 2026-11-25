@@ -10,13 +10,21 @@ All notable changes to Streamlord are recorded here. The format follows
 
 - In `interpolate { }`, a value marked with `+` in the text of a `Trusted` is escaped where it
   lands, whether the `Trusted` is marked or not: `${+Trusted("Hi <i>${+name}</i>")}`, and a `val`
-  set to one and marked later. In a `Trusted` handed to the placeholder form whose `Html` is
-  marked, `${+interpolate("<b>%s</b>", Trusted("<i>${+name}</i>"))}`, a value marked in it is
-  escaped in that `Html`'s element text, which is then judged as any `Html` is; anywhere else in
-  it the value is refused, since the block cannot know the prefixes the `Html` was built with, and a
-  `Trusted` marked there is its text. Before, the page got the mark's
-  note, block id and all, and lost the value. A refusal's `index` counts the marked `Trusted` or
-  `Html` too, as the placeholder form counts a `Trusted` value (#338, #352).
+  set to one and marked later. A value marked in an `Html` the placeholder form built, in its
+  markup or in a `Trusted` handed to it, is escaped in element text, whether the `Html` is marked or
+  written unmarked: `${+interpolate("<b>%s</b>", Trusted("<i>${+name}</i>"))}`. A marked `Html` is
+  then judged as any `Html` is, and a `Trusted` marked in it is built as one. Before, the marked form
+  wrote the mark's note, block id and all, into the page and lost the value, and in the unmarked
+  form a `Trusted` marked there could move a value the placeholder form had escaped for element
+  text into a `<script>`, an `onclick` or a `javascript:` URL. A refusal's `index` counts the
+  marked `Trusted` or `Html` too, as the placeholder form counts a `Trusted` value (#338, #352,
+  #354).
+- **Breaking:** in `interpolate { }`, a value marked in an `Html` the placeholder form built is
+  refused anywhere but element text, written unmarked too:
+  `interpolate { "<p>${interpolate("<b title=\"${+name}\">b</b>")}</p>" }` throws, where it
+  escaped `name` into `title`. The block cannot know the `data-*` prefixes the `Html` was built
+  with, so it cannot tell such a place from a Datastar expression. Hand the value to that
+  placeholder form as one of its own, `interpolate("<b title=\"%s\">b</b>", name)` (#354).
 - streamlord-spring: two test helpers in `io.github.markusaugust.streamlord.spring.test` read a
   whole stream through MockMvc, a `suspend` controller's too. `MockMvcTester.datastar(method, uri,
   signals)` sends the request as Datastar's client does, and `mockMvc.datastarRequestFactory()`
@@ -41,7 +49,9 @@ All notable changes to Streamlord are recorded here. The format follows
 - A literal in a `Trusted(...)` marked in `interpolate { }`, alone, as a branch of a marked `if`,
   or handed to the placeholder form whose `Html` is marked, is read as the block's markup, as one
   in a `Trusted` written unmarked is: `${+name}` in it is no longer hinted, and a value Kotlin
-  fills into it is warned and offered the mark with `+` (#338, #352).
+  fills into it is warned and offered the mark with `+` (#338, #352). A value marked in the
+  format of the placeholder form in the block, or in a `Trusted`'s own tags handed to it, is
+  refused outside element text as core refuses it, and no mark is offered there (#354).
 - A value may be null where the calls it ends in show it, as the Kotlin compiler types it:
   `s.takeIf { c }`, `q.let { v -> v }`, `q?.plus(s ?: "")` and `xs.first()` of a
   `List<String?>` no longer have the rewrite to `interpolate` preferred, since `interpolate`
