@@ -58,6 +58,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### The analysis
 
+- An issue on a Kotlin value in an HTML string links to Streamlord's page on strings at its own
+  domain, `https://streamlord.sobernetics.no/strings/`, where it linked to the host behind it.
 - A literal in a `Trusted(...)` marked in `interpolate { }`, alone, as a branch of a marked `if`,
   or handed to the placeholder form whose `Html` is marked, is read as the block's markup, as one
   in a `Trusted` written unmarked is: `${+name}` in it is no longer hinted, and a value Kotlin

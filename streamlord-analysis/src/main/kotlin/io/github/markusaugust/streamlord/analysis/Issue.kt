@@ -224,7 +224,7 @@ internal fun sourcePosition(
 /** Where the diagnostics point: in the Datastar reference, and for a Kotlin value in an HTML string in Streamlord's own documentation. */
 internal object Docs {
     /** Streamlord's page on HTML strings and `interpolate`. */
-    public const val STRINGS: String = "https://streamlord-docs.netlify.app/strings/"
+    public const val STRINGS: String = "https://streamlord.sobernetics.no/strings/"
     public const val ATTRIBUTES: String = "https://data-star.dev/reference/attributes"
     public const val ACTIONS: String = "https://data-star.dev/reference/actions"
     public const val SSE: String = "https://data-star.dev/reference/sse_events"
