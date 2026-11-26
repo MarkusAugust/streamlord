@@ -1,4 +1,5 @@
 {"what":"file","language":"kotlin"}
+{"what":"diagnostic","code":"unknown-signal","link":"https://data-star.dev/guide/reactive_signals","message":"No markup or code in the project defines the signal 'running'.","range":"4:73-4:80","severity":"Warning","source":"streamlord"}
 {"what":"hover","at":"4:22-4:35","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"4:22-4:35"}]}
 {"what":"hover","at":"4:52-4:61","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"4:52-4:61"}]}
 {"what":"rename","at":"1:1-5:1","error":"No signal here to rename."}
