@@ -11512,11 +11512,9 @@ unsafe-interpolation 282-284 error: interpolate always throws here: m lands in o
 == corpus/kotlin-interpolate-block.json: a name set to a name set to a mark is the mark where it is written
 == corpus/kotlin-interpolate-block.json: a var set to a mark of the block, written in an event handler, is judged as the mark
 unsafe-interpolation 282-284 error: interpolate always throws here: m lands in onclick, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
-== corpus/kotlin-interpolate-block.json: a var that may hold a mark or another value is a template where it lands
-interpolate-template 296-298 warning: Kotlin fills in $m before interpolate sees the markup, so interpolate neither escapes nor refuses it. It lands in onclick, which the browser runs. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
-== corpus/kotlin-interpolate-block.json: a var set to a mark later is a template in element text
-interpolate-template 286-288 warning: Kotlin fills in $m before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
-  fix "Mark $m with +, which interpolate escapes" 286-288 "${+m}"
+== corpus/kotlin-interpolate-block.json: a var given a mark in a statement of its own holds it where it lands in onclick
+unsafe-interpolation 296-298 error: interpolate always throws here: m lands in onclick, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a var given a mark in a statement of its own is the mark in element text
 == corpus/kotlin-interpolate-block.json: a name set to a mark of a value of any type, in an event handler, is warned
 unsafe-interpolation 279-281 warning: interpolate throws here unless m is Trusted(...): it lands in onclick, which the browser runs. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
 == corpus/kotlin-interpolate-block.json: a name set to a number's plus is a number
@@ -11560,9 +11558,7 @@ interpolate-template 285-287 warning: Kotlin fills in $m before interpolate sees
 interpolate-template 287-289 warning: Kotlin fills in $m before interpolate sees the markup, so interpolate neither escapes nor refuses it. It lands in a script, which the browser runs. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
 == corpus/kotlin-interpolate-block.json: a name set to a mark in a branch of what the block gives is judged there
 unsafe-interpolation 284-286 error: interpolate always throws here: m lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
-== corpus/kotlin-interpolate-block.json: a var given a mark in a block inside this one is no mark of this one
-interpolate-template 300-302 warning: Kotlin fills in $m before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
-  fix "Mark $m with +, which interpolate escapes" 300-302 "${+m}"
+== corpus/kotlin-interpolate-block.json: a var given a mark in an inner block is that block's mark where it lands there
 == corpus/kotlin-interpolate-block.json: a name set to a plus on a number a call gives is a template
 interpolate-template 289-291 warning: Kotlin fills in $m before interpolate sees the markup, so interpolate neither escapes nor refuses it. It lands in onclick, which the browser runs. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
 == corpus/kotlin-interpolate-block.json: a let after a safe call marks a value that cannot be null
@@ -11599,6 +11595,78 @@ unsafe-interpolation 284-292 error: interpolate always throws here: name lands i
 unsafe-interpolation 282-290 error: interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
 == corpus/kotlin-interpolate-block.json: a mark in a string handed to println through a call that keeps it is refused
 unsafe-interpolation 296-304 error: interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a name set to a mark is judged in what run gives as the block's last statement
+unsafe-interpolation 283-285 error: interpolate always throws here: m lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a name set to a mark is judged in what with gives as the block's last statement
+unsafe-interpolation 290-292 error: interpolate always throws here: m lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a name set to a mark is judged in what run gives in a branch
+unsafe-interpolation 290-292 error: interpolate always throws here: m lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a name set to a mark in element text of what run gives is no warning
+== corpus/kotlin-interpolate-block.json: let's parameter stands for its receiver, a name set to a mark
+unsafe-interpolation 285-288 error: interpolate always throws here: it lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: this in with stands for its argument, a name set to a mark
+unsafe-interpolation 287-292 error: interpolate always throws here: this lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a let on what run alone gives stands for the mark run ends with
+unsafe-interpolation 293-296 error: interpolate always throws here: it lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: let's parameter in element text is no warning
+== corpus/kotlin-interpolate-block.json: a var given a mark in a loop may hold its first value still
+interpolate-template 312-314 warning: Kotlin fills in $m before interpolate sees the markup, so interpolate neither escapes nor refuses it. It lands in a script, which the browser runs. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a var given another value after its mark holds that value
+interpolate-template 291-293 warning: Kotlin fills in $m before interpolate sees the markup, so interpolate neither escapes nor refuses it. It lands in a script, which the browser runs. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a lambda called in the block runs its inner block while the outer one is built
+interpolate-placeholders 296-298 error: interpolate throws here: m holds a mark of the interpolate { } around this one, +name, and a mark stands for its value only in the markup of the block that made it, so the value would be lost. Mark the value in this block: ${+name}.
+  fix "Mark name in this block" 296-298 "${+name}"
+== corpus/kotlin-interpolate-block.json: a lambda in a val nothing calls may run later
+interpolate-placeholders 296-298 warning: interpolate throws here if it runs while the block around it is still being built: m holds a mark of the interpolate { } around this one, +name, and a mark stands for its value only in the markup of the block that made it, so the value would be lost. Mark the value in this block: ${+name}.
+  fix "Mark name in this block" 296-298 "${+name}"
+== corpus/kotlin-interpolate-block.json: an Html holding a mark and a Trusted that leaves an element open is refused where it lands in element text
+interpolate-placeholders 284-332 error: interpolate throws here: interpolate("<b>${+name}</b>%… is an Html that holds a value marked in the block, and it leaves a tag or an element open in element text, so interpolate escapes it as text: the value would be lost. Hand the value to the call that builds the Html, at a %s placeholder.
+== corpus/kotlin-interpolate-block.json: an Html holding a mark and a Trusted that closes what it opens is markup in place
+== corpus/kotlin-interpolate-block.json: a block of interpolate imported under an alias is read as interpolate's
+unsafe-interpolation 112-120 error: interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a name set to a mark in a block of interpolate imported under an alias is judged where it lands
+unsafe-interpolation 127-129 error: interpolate always throws here: m lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a template in a block of interpolate imported under an alias is interpolate's to escape
+interpolate-template 107-112 warning: Kotlin fills in $name before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+  fix "Mark $name with +, which interpolate escapes" 107-112 "${+name}"
+== corpus/kotlin-interpolate-block.json: the placeholder form of interpolate imported under an alias is read as interpolate's
+unsafe-interpolation 110-112 error: interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a var given a mark under an if on the line before may hold its first value still
+interpolate-template 316-318 warning: Kotlin fills in $m before interpolate sees the markup, so interpolate neither escapes nor refuses it. It lands in a script, which the browser runs. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a var given a mark under an else on the line before may hold another value
+interpolate-template 329-331 warning: Kotlin fills in $m before interpolate sees the markup, so interpolate neither escapes nor refuses it. It lands in a script, which the browser runs. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a var given a mark on a line of its own holds the mark from then on
+unsafe-interpolation 301-303 error: interpolate always throws here: m lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a var a lambda gives another value may hold it after its mark
+interpolate-template 317-319 warning: Kotlin fills in $m before interpolate sees the markup, so interpolate neither escapes nor refuses it. It lands in a script, which the browser runs. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a lambda the block calls only under an if may not run
+interpolate-placeholders 296-298 warning: interpolate throws here if it runs while the block around it is still being built: m holds a mark of the interpolate { } around this one, +name, and a mark stands for its value only in the markup of the block that made it, so the value would be lost. Mark the value in this block: ${+name}.
+  fix "Mark name in this block" 296-298 "${+name}"
+== corpus/kotlin-interpolate-block.json: a lambda the block calls by invoke runs at once
+interpolate-placeholders 296-298 error: interpolate throws here: m holds a mark of the interpolate { } around this one, +name, and a mark stands for its value only in the markup of the block that made it, so the value would be lost. Mark the value in this block: ${+name}.
+  fix "Mark name in this block" 296-298 "${+name}"
+== corpus/kotlin-interpolate-block.json: a lambda called in a lambda kept for later may run later
+interpolate-placeholders 296-298 warning: interpolate throws here if it runs while the block around it is still being built: m holds a mark of the interpolate { } around this one, +name, and a mark stands for its value only in the markup of the block that made it, so the value would be lost. Mark the value in this block: ${+name}.
+  fix "Mark name in this block" 296-298 "${+name}"
+== corpus/kotlin-interpolate-block.json: a run the file declares is no scope function
+interpolate-template 212-214 warning: Kotlin fills in $m before interpolate sees the markup, so interpolate neither escapes nor refuses it. It lands in a script, which the browser runs. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a lambda the block calls on a line after && may not run
+interpolate-placeholders 303-305 warning: interpolate throws here if it runs while the block around it is still being built: m holds a mark of the interpolate { } around this one, +name, and a mark stands for its value only in the markup of the block that made it, so the value would be lost. Mark the value in this block: ${+name}.
+  fix "Mark name in this block" 303-305 "${+name}"
+interpolate-template 358-360 warning: Kotlin fills in $r before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+  fix "Mark $r with +, which interpolate escapes" 358-360 "${+r}"
+== corpus/kotlin-interpolate-block.json: a lambda the block calls on a line after ?: may not run
+interpolate-placeholders 303-305 warning: interpolate throws here if it runs while the block around it is still being built: m holds a mark of the interpolate { } around this one, +name, and a mark stands for its value only in the markup of the block that made it, so the value would be lost. Mark the value in this block: ${+name}.
+  fix "Mark name in this block" 303-305 "${+name}"
+interpolate-template 370-372 warning: Kotlin fills in $r before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+  fix "Mark $r with +, which interpolate escapes" 370-372 "${+r}"
+== corpus/kotlin-interpolate-block.json: a var given a mark under an if with an annotation between may hold its first value still
+interpolate-template 350-352 warning: Kotlin fills in $m before interpolate sees the markup, so interpolate neither escapes nor refuses it. It lands in a script, which the browser runs. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: an alias a local value takes again is no call of interpolate
+== corpus/kotlin-interpolate-block.json: an alias a member takes again is no call of interpolate
+== corpus/kotlin-interpolate-block.json: a lambda the block calls in a template under an if may not run
+interpolate-placeholders 303-305 warning: interpolate throws here if it runs while the block around it is still being built: m holds a mark of the interpolate { } around this one, +name, and a mark stands for its value only in the markup of the block that made it, so the value would be lost. Mark the value in this block: ${+name}.
+  fix "Mark name in this block" 303-305 "${+name}"
 == corpus/kotlin-interpolate.json: a template in the format is filled before interpolate sees it
 interpolate-template 16-22 warning: Kotlin fills in $query before interpolate sees the markup, so interpolate neither escapes nor refuses it. Make it a %s placeholder and pass the value to interpolate.
   fix "Make $query a %s placeholder, which interpolate escapes" 16-22 "%s"

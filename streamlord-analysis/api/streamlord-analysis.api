@@ -104,20 +104,23 @@ public final class io/github/markusaugust/streamlord/analysis/AttributeSpec {
 }
 
 public final class io/github/markusaugust/streamlord/analysis/CallSite {
-	public fun <init> (Ljava/lang/String;IIILjava/util/List;Z)V
+	public fun <init> (Ljava/lang/String;IIILjava/util/List;ZI)V
+	public synthetic fun <init> (Ljava/lang/String;IIILjava/util/List;ZIILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/lang/String;
 	public final fun component2 ()I
 	public final fun component3 ()I
 	public final fun component4 ()I
 	public final fun component5 ()Ljava/util/List;
 	public final fun component6 ()Z
-	public final fun copy (Ljava/lang/String;IIILjava/util/List;Z)Lio/github/markusaugust/streamlord/analysis/CallSite;
-	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/CallSite;Ljava/lang/String;IIILjava/util/List;ZILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/CallSite;
+	public final fun component7 ()I
+	public final fun copy (Ljava/lang/String;IIILjava/util/List;ZI)Lio/github/markusaugust/streamlord/analysis/CallSite;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/CallSite;Ljava/lang/String;IIILjava/util/List;ZIILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/CallSite;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun expressionStrings (Lio/github/markusaugust/streamlord/analysis/CallSiteSpec;)Ljava/util/List;
 	public final fun getArgs ()Ljava/util/List;
 	public final fun getCloseParen ()I
 	public final fun getName ()Ljava/lang/String;
+	public final fun getNameEnd ()I
 	public final fun getNameStart ()I
 	public final fun getOpenParen ()I
 	public final fun getPositional ()Ljava/util/List;

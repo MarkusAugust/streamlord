@@ -71,6 +71,9 @@ internal class Span(
 
     /** Whether it is what a `val` or `var` is set to where it is declared. */
     var initialiser = false
+
+    /** For a value an assignment gives, where the name it gives it to starts; -1 for any other. */
+    var assignedAt = -1
 }
 
 /**
@@ -167,7 +170,7 @@ internal class FileFacts(
      */
     val trustedArguments: List<IntRange> by lazy(LazyThreadSafetyMode.PUBLICATION) {
         val out = ArrayList<IntRange>()
-        val names = coreAliases(src).filterValues { it == "Trusted" }.keys + "Trusted"
+        val names = coreNames(src, "Trusted")
         if (names.none { it in src }) return@lazy out
         val lex = lexKotlin(src)
         val own = !shadowsCore(src, "Trusted")
@@ -254,6 +257,12 @@ internal class FileFacts(
         while (b > a && src[b].isWhitespace()) b--
         return code[a] && src[a] == '{' && matching(src, code, a) == b
     }
+
+    /** The block or the lambda [at] stands in, from its `{` to its `}`, past the templates around it; null at the top level. */
+    fun blockAround(at: Int): IntRange? = codeBlocks.around(at)
+
+    // The blocks and lambdas of the code, a template's code among it.
+    private val codeBlocks: List<IntRange> by lazy(LazyThreadSafetyMode.PUBLICATION) { codeBlocks(src, code) }
 
     /**
      * Whether no lambda opens in the code of [range], a template's braces aside, and no call there changes what it is called
@@ -2126,7 +2135,9 @@ private fun declarations(
                 // A statement that gives a name a value, which no declaration's name, type or member is.
                 f.kind == "block" && f.word != "val" && f.word != "var" && VALUE_AFTER.matchAt(src, end) != null &&
                     word !in HARD_KEYWORDS && src.getOrNull(codeBefore(src, code, i)) !in ASSIGNED_AFTER_NOT -> {
-                    VALUE_AFTER.matchAt(src, end)?.let { assignedNames += word to f.begin(Span(it.range.last + 1)) }
+                    VALUE_AFTER.matchAt(src, end)?.let {
+                        assignedNames += word to f.begin(Span(it.range.last + 1).also { s -> s.assignedAt = i })
+                    }
                 }
             }
             // `open` in `door.open` is a name, and says nothing of what the next line declares.

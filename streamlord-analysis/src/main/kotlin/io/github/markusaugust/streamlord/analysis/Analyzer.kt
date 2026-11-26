@@ -211,6 +211,9 @@ internal fun nameBefore(
 /** The name a lambda's brace follows, as [Analyzer.runsLater] reads it. */
 private val NAME_BEFORE = regex("""[\p{L}_][\p{L}\p{Nd}_]*$""")
 
+/** A call of a name, `f()` or `f.invoke()`, that is no member of anything. */
+private val CALLED_BY_NAME = regex("""(?<![\p{L}\p{Nd}_.])([\p{L}_][\p{L}\p{Nd}_]*)\s*(?:\(|\.\s*invoke\s*\()""")
+
 /** Calls whose trailing lambda runs after the call returns, if at all. */
 private val KEPT_FOR_LATER = setOf("lazy", "thread", "launch", "async", "sequence", "flow", "Runnable", "Thread")
 
@@ -259,13 +262,17 @@ private val INTERPOLATE = setOf("interpolate")
  * `interpolate {`, `interpolate(prefixes) {`, or the block in the parentheses, `interpolate({` and
  * `interpolate(prefixes, {`, by its name `block =` too: a call of its own and no member of anything.
  */
-private val INTERPOLATE_BLOCK =
+private val INTERPOLATE_BLOCK = interpolateBlock("interpolate")
+
+/** [INTERPOLATE_BLOCK] called by [names], a pattern of names, each standing for core's `interpolate`. */
+private fun interpolateBlock(names: String): Regex =
     regex(
         // Each piece is a pattern of its own: the name, the parenthesis that holds the block, the prefixes before it.
-        """(?<![\p{L}\p{Nd}_.`])(?:io\.github\.markusaugust\.streamlord\.core\.domain\.)?(interpolate)\s*""" +
+        """(?<![\p{L}\p{Nd}_.`])(?:${Regex.escape(DOMAIN)}\.)?($names)\s*""" +
             """(?:\(\s*(?:([^(){}]*(?:\([^()]*\)[^(){}]*)*),\s*)?(?:block\s*=\s*)?(?=\{))?""" +
             """(?:\(([^()]*(?:\([^()]*\)[^()]*)*)\)\s*)?\{""",
     )
+
 private val PREFIXES_GIVEN =
     regex("""(?:prefixes\s*=\s*)?(?:listOf|mutableListOf|arrayListOf)\s*\(\s*((?:"[^"\\$]*"\s*,\s*)*(?:"[^"\\$]*"\s*,?\s*)?)\)""")
 private val PLAIN_STRING = regex(""""([^"\\$]*)"""")
@@ -276,13 +283,20 @@ internal class InterpolateBlock(
     val prefixes: List<String>?,
 )
 
+/** [INTERPOLATE_BLOCK], called by each of [coreNames] of `interpolate`: `import ...interpolate as page`. */
+private fun blockCalls(src: String): Regex {
+    val names = coreNames(src, "interpolate")
+    return if (names.size == 1) INTERPOLATE_BLOCK else interpolateBlock(names.joinToString("|") { Regex.escape(it) })
+}
+
 /** The braces of each `interpolate { ... }` and `interpolate(prefixes) { ... }` of the file, with the prefixes written as plain literals. */
 internal fun interpolateBlocks(
     src: String,
     code: BooleanArray,
 ): List<InterpolateBlock> =
-    INTERPOLATE_BLOCK.findAll(src).filter { code[it.range.first] }.mapNotNullTo(ArrayList()) { m ->
-        val name = m.range.first + m.value.indexOf("interpolate")
+    blockCalls(src).findAll(src).filter { code[it.range.first] }.mapNotNullTo(ArrayList()) { m ->
+        // Past core's package, where the call names it: Kotlin/JS gives no range of a group.
+        val name = m.range.first + if (m.value.startsWith("$DOMAIN.")) DOMAIN.length + 1 else 0
         // A function declared by the name is no call of it.
         val before = codeBefore(src, code, m.range.first)
         if (before >= 2 && src.startsWith("fun", before - 2) && !isWordPart(src.getOrNull(before - 3))) {
@@ -298,7 +312,15 @@ internal fun interpolateBlocks(
                 ?: return@mapNotNullTo null
         val list = (m.groups[2] ?: m.groups[3])?.let { PREFIXES_GIVEN.matchEntire(it.value.trim()) }
         InterpolateBlock(
-            CallSite("interpolate", name, m.range.last, close, emptyList(), trailingLambda = true),
+            CallSite(
+                "interpolate",
+                name,
+                m.range.last,
+                close,
+                emptyList(),
+                trailingLambda = true,
+                nameEnd = name + m.groupValues[1].length,
+            ),
             m.range.last..close,
             list?.let { l ->
                 PLAIN_STRING.findAll(l.groupValues[1]).map { it.groupValues[1] }.toList()
@@ -469,7 +491,7 @@ public class Analyzer(
         val eventCalls = EventCalls(src, lex.mask)
         // At a DSL call the DSL is there; an import from elsewhere may still take a helper's name.
         val siteHelpers by lazy(LazyThreadSafetyMode.NONE) { unshadowed(src, EXPRESSION_HELPERS) }
-        for (site in findCallSites(src, allSiteNames, lex)) {
+        for (site in interpolateCallSites(src, allSiteNames, lex)) {
             // Somebody else's call: its strings are judged as any string handed to an unknown function.
             if (foreign(site.name, site.nameStart)) continue
             val issues = ArrayList<Issue>()
@@ -519,7 +541,7 @@ public class Analyzer(
             if (otherInterpolate) {
                 emptyList()
             } else {
-                findCallSites(
+                interpolateCallSites(
                     src,
                     INTERPOLATE,
                     KotlinLex(lex.strings, facts.code, lex.comments),
@@ -941,23 +963,56 @@ public class Analyzer(
                 return@any k >= 0 && nameBefore(src, k + 1) in KEPT_FOR_LATER
             }
             val before = src.getOrNull(k)
-            before == '=' || before == '(' || before == ',' ||
+            (before == '=' && !calledAtOnce(src, brace)) || before == '(' || before == ',' ||
                 nameBefore(src, k + 1) in KEPT_FOR_LATER
         }
     }
 
     /**
-     * The text of [html] as the code writes it, each value and mark standing as text: null where a Trusted handed to it or a
-     * template that marks nothing may write markup into it.
+     * Whether the lambda at [brace], what a `val` is set to, is called by the `val`'s name, `f()` or `f.invoke()`, in a
+     * statement of the block the `val` is declared in that always runs: so it runs where the call stands, before the block
+     * goes on.
+     */
+    private fun calledAtOnce(
+        src: String,
+        brace: Int,
+    ): Boolean {
+        val facts = fileFacts(src)
+        val (name, d) =
+            facts.names.firstNotNullOfOrNull { (name, list) ->
+                list.firstOrNull { !it.mutable && it.value?.start == brace }?.let { name to it }
+            } ?: return false
+        val block = facts.blockAround(d.at)
+        val close = matching(src, facts.code, brace).takeIf { it > 0 } ?: return false
+        val operands = Operands(src, facts.code)
+        // A call in a template is no statement of the block, whatever statement the template stands in: the literal the
+        // call stands in is the one the `val` does, if any.
+        val literal = lex(src).stringAt(d.at)
+        return CALLED_BY_NAME.findAll(src, close).takeWhile { block == null || it.range.first < block.last }.any { m ->
+            val at = m.range.first
+            m.groupValues[1] == name && facts.code[at] && facts.blockAround(at) == block && lex(src).stringAt(at) === literal &&
+                operands.startsStatement(at)
+        }
+    }
+
+    /**
+     * The text of [html] as the code writes it, each value and mark standing as text and each Trusted as the markup its
+     * literal writes: null where a Trusted whose text the source does not show, or a template that marks nothing, may
+     * write markup into it.
      */
     private fun heldText(
         src: String,
         code: BooleanArray,
         html: PlaceholderHtml,
     ): String? {
-        if (html.trusted.isNotEmpty()) return null
-        val format = interpolateFormat(html.site, src, code)?.second ?: return null
+        val (formatArg, format) = interpolateFormat(html.site, src, code) ?: return null
         if (format.interpolations.any { markedValue(it) == null }) return null
+        val values = html.site.positional.filter { it.start >= formatArg.end }
+        // The markup each Trusted value writes, null for any other value.
+        val markup =
+            values.map { v ->
+                if ((v.start until v.end) in html.trusted) trustedLiteral(src, v.text, v.start) ?: return null else null
+            }
         val text =
             buildString {
                 var cut = 0
@@ -967,7 +1022,8 @@ public class Analyzer(
                 }
                 append(format.text, cut, format.text.length)
             }
-        return HELD_PERCENT.replace(text) { if (it.value == "%%") "%" else "x" }
+        var k = 0
+        return HELD_PERCENT.replace(text) { if (it.value == "%%") "%" else markup.getOrNull(k++) ?: "x" }
     }
 
     private fun placeholderHtmls(
@@ -1165,9 +1221,9 @@ public class Analyzer(
         lex: KotlinLex,
     ): (KotlinString) -> Boolean {
         val formats by lazy(LazyThreadSafetyMode.NONE) {
-            if (shadowsCore(src, "interpolate")) emptyList() else outermost(findCallSites(src, INTERPOLATE, lex))
+            if (shadowsCore(src, "interpolate")) emptyList() else outermost(interpolateCallSites(src, INTERPOLATE, lex))
         }
-        val calls by lazy(LazyThreadSafetyMode.NONE) { outermost(findCallSites(src, htmlSiteNames, lex)) }
+        val calls by lazy(LazyThreadSafetyMode.NONE) { outermost(interpolateCallSites(src, htmlSiteNames, lex)) }
         return { s ->
             isHtmlString(src, s) ||
                 around(formats, s)?.let { interpolateFormat(it, src) }?.second?.start == s.start ||
@@ -1280,7 +1336,7 @@ public class Analyzer(
                 out += ref.copy(start = range.first, end = range.last + 1, site = site)
             }
         }
-        for (site in findCallSites(src, allSiteNames, lex)) {
+        for (site in interpolateCallSites(src, allSiteNames, lex)) {
             if (foreign(site.name, site.nameStart)) continue
             // The literals the analysis judges at the site are the site's; a `+` chain's are read as free strings, as ever.
             for (judged in judgedStrings(site, src, lex)) {

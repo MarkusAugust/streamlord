@@ -109,6 +109,20 @@ All notable changes to Streamlord are recorded here. The format follows
   judged as the mark in every string the block gives, followed through names, sums, branches,
   `let`, `trim()`, `joinToString` and lists, where it was only in the block's last statement
   (#364).
+- In `interpolate { }`, a name set to a mark is judged in what `run { }` and `with(x) { }` give,
+  and `it` of `let` and `also`, and `this` of `x.run`, `apply` and `with`, stand for what the
+  lambda is called on: `m.let { "<script>$it</script>" }` is an error as core refuses it, where it
+  was a warning (#364).
+- In `interpolate { }`, a `var` given a mark in a statement of its own that always runs holds the
+  mark from there on, where it was read as any value it had been given (#364).
+- In `interpolate { }`, a block inside a lambda the outer block calls by name,
+  `val f = { interpolate { ... } }; f()`, holding a mark of the outer block is an error, where it
+  was a warning (#364).
+- An `Html` holding a mark and a `Trusted` literal is read with the `Trusted`'s markup in place, so
+  a `Trusted` that leaves an element open is an error where the `Html` lands in element text
+  (#364).
+- `interpolate` imported under an alias, `import ...interpolate as page`, is read as `interpolate`,
+  its block and its placeholder form alike, unless the file declares the alias again (#364).
 - A value may be null where the calls it ends in show it, as the Kotlin compiler types it:
   `s.takeIf { c }`, `q.let { v -> v }`, `q?.plus(s ?: "")` and `xs.first()` of a
   `List<String?>` no longer have the rewrite to `interpolate` preferred, since `interpolate`
@@ -360,6 +374,9 @@ All notable changes to Streamlord are recorded here. The format follows
 - **Breaking:** `attributesIndexes`, `expressionOptions`, `signalNameStrings`, `htmlStringAt` and
   `tokenizeAttributeName` are no longer public, nor `AttributesIndex`, `ExpressionOption` and
   `SignalNameString`: `datastarStrings` and `datastarName` answer what they were put together for.
+- **Breaking:** `CallSite` has `nameEnd`, just past the name as the call writes it, which a call by
+  an alias names otherwise than `name`. Code compiled against its constructor or `copy` needs a
+  rebuild; source stays as it is (#364).
 
 - A call under a comment that ends in a full stop is no longer taken for a call on a receiver:
   `increment("click-count")` below `// Count the click.` gets its `signal-name-hyphen` error, and

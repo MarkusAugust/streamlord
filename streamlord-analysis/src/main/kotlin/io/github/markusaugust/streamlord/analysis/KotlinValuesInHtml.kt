@@ -247,7 +247,7 @@ internal fun Analyzer.checkInterpolateSite(
         issues +=
             Issue(
                 site.nameStart,
-                site.nameStart + site.name.length,
+                site.nameEnd,
                 "interpolate throws IllegalArgumentException here: the markup has " +
                     "$h %s ${if (h == 1) "placeholder" else "placeholders"} and " +
                     "$v ${if (v == 1) "value is" else "values are"} given. " +
@@ -1084,21 +1084,22 @@ internal fun Analyzer.heldMark(
     if (call?.receiver != null && call.name == "toString" && call.lambda == null && call.args.isBlank()) {
         return held(0 until call.receiver.length)?.asText()
     }
-    // `also` and `apply` give their receiver, `let` and `run` what their lambda ends with: the receiver where that is it
-    // or a mark of it, `name.let { +it }`.
-    if (scopeCall(call)) {
-        val receiver = 0 until call!!.receiver!!.length
-        if (call.name == "also" || call.name == "apply") return held(receiver)
+    // `also` and `apply` give what they are called on, `let`, `run` and `with` what their lambda ends with: what they are
+    // called on where that is it or a mark of it, `name.let { +it }`.
+    if (scopeCall(src, call)) {
+        val on = calledOn(t, call!!)
+        if (call.name in GIVE_WHAT_THEY_ARE_CALLED_ON) return held(on)
         val lambda = call.lambda!!
         val body = lambdaResult(lambda)
         val offset = t.length - 1 - lambda.length
         val result = resultIn(lambda)?.let { offset + it.first..offset + it.last } ?: return null
-        val names = scope(src, lambda, call.name, false).keys
-        if (body in names) return held(receiver)
-        if (marked(body) in names) {
+        val names = if (on == null) emptySet() else scope(src, lambda, call.name, false).keys
+        if (body in names) return held(on)
+        if (on != null && marked(body) in names) {
+            val value = t.substring(on.first, on.last + 1)
             // A mark of a mark is the mark it was, and a + on a number Kotlin's own.
-            if (unparen(call.receiver).startsWith("+")) return held(receiver)
-            return markOf(call.receiver.trim(), a, a + result.first, whole = true, safe = call.safe)
+            if (unparen(value).startsWith("+")) return held(on)
+            return markOf(value, a + on.first, a + result.first, whole = true, safe = call.safe)
         }
         return held(result)
     }
@@ -1110,10 +1111,13 @@ internal fun Analyzer.heldMark(
     TEXT_OF_VALUE.matchEntire(t)?.let { m -> return held(0 until m.groupValues[1].length)?.takeIf { it.html }?.asText() }
     if (coreCall(src, t, "interpolate") && t.endsWith(")")) return htmlAt(a + t.indexOf('('))
     if (KOTLIN_NAME.matchEntire(t) != null) {
-        val d = declarationOf(src, t, a)?.takeUnless { it.overridable } ?: return null
+        val declared = declarationOf(src, t, a)
+        // `it` of `let`, or `this` of `with`, stands for what the lambda around it is called on.
+        boundValue(src, t, a, declared)?.let { return heldMark(src, opts, it.first, it.last + 1, site, htmlAt, depth + 1) }
+        val d = declared?.takeUnless { it.overridable } ?: return null
         // A var holds one of the values it is given before here, as a branch taken holds its own.
         if (d.mutable) {
-            val given = d.assigned.filter { it.start < a && it.end >= 0 }.ifEmpty { return null }
+            val given = givenBefore(src, d, a).filter { it.end >= 0 }.ifEmpty { return null }
             return either(given.map { heldMark(src, opts, it.start, it.end, site, htmlAt, depth + 1) })
         }
         // Set to a call of interpolate and nothing more, the declaration keeps the call's start and no value to read.
@@ -1196,8 +1200,8 @@ private fun spansIn(
  */
 private fun joinsString(value: String): Boolean {
     val call = lastCall(value)
-    if (scopeCall(call)) {
-        val given = if (call!!.name == "let" || call.name == "run") lambdaResult(call.lambda!!) else call.receiver!!
+    if (receiverScopeCall(call)) {
+        val given = if (call!!.name in GIVE_WHAT_THEY_ARE_CALLED_ON) call.receiver!! else lambdaResult(call.lambda!!)
         return joinsString(given)
     }
     return splitTop(value, "+").let { parts ->
@@ -1206,12 +1210,86 @@ private fun joinsString(value: String): Boolean {
     }
 }
 
-/** The scope functions whose value heldMark follows. */
+/** The scope functions on a receiver whose value heldMark follows; `run { }` alone and `with` are read by [scopeCall]. */
 private val SCOPE_FUNCTIONS = setOf("let", "run", "also", "apply")
 
 /** Whether [call] is one of [SCOPE_FUNCTIONS] on a receiver with its lambda alone: `name.let { +it }`. */
-private fun scopeCall(call: Call?): Boolean =
+private fun receiverScopeCall(call: Call?): Boolean =
     call?.receiver != null && call.lambda != null && call.args.isBlank() && call.name in SCOPE_FUNCTIONS
+
+/**
+ * Whether [call] is a scope function: one on a receiver, or `run { }` on nothing and `with(value) { }` on its argument,
+ * where [src] declares no function of the name that [call] may be instead.
+ */
+private fun scopeCall(
+    src: String,
+    call: Call?,
+): Boolean {
+    if (receiverScopeCall(call)) return true
+    if (call?.lambda == null || call.receiver != null) return false
+    val bare =
+        (call.name == "run" && call.args.isBlank()) || (call.name == "with" && splitTop(call.args, ",").count { it.isNotBlank() } == 1)
+    return bare && fileFacts(src).functions[call.name].isNullOrEmpty()
+}
+
+/** The scope functions that give what they are called on, not what their lambda ends with. */
+private val GIVE_WHAT_THEY_ARE_CALLED_ON = setOf("also", "apply")
+
+/** Where in [t] what the scope function [call] ending it is called on is written: its receiver, `with`'s argument; null for `run` alone. */
+private fun calledOn(
+    t: String,
+    call: Call,
+): IntRange? {
+    call.receiver?.let { return 0 until it.length }
+    if (call.name != "with") return null
+    val open = t.indexOf('(') + 1
+    val lead = call.args.length - call.args.trimStart().length
+    return open + lead until open + call.args.trimEnd().length
+}
+
+/**
+ * Where the value is written that [name] at [at] stands for, as the innermost lambda around it binds the name: what a scope
+ * function is called on. Null where that lambda is any other call's, or binds no such name, or [declared], the declaration
+ * [name] is read by there, is in it.
+ */
+private fun boundValue(
+    src: String,
+    name: String,
+    at: Int,
+    declared: Declaration?,
+): IntRange? {
+    val facts = fileFacts(src)
+    val lambda = facts.blockAround(at) ?: return null
+    if (declared != null && declared.at > lambda.first) return null
+    val start = Operands(src, facts.code).startBefore(lambda.first).takeIf { it >= 0 } ?: return null
+    val text = src.substring(start, lambda.last + 1)
+    val call = lastCall(text)?.takeIf { it.lambda != null && lambda.last - it.lambda.length - 1 == lambda.first } ?: return null
+    if (!scopeCall(src, call)) return null
+    val trimmed = text.trimStart()
+    val on = calledOn(trimmed, call) ?: return null
+    val from = start + text.length - trimmed.length
+    return (from + on.first..from + on.last).takeIf { name in scope(src, call.lambda!!, call.name, false).keys }
+}
+
+/**
+ * The values the var [d] may hold at [at]: each given before it, or only the last where that is given in a statement of its
+ * own in [at]'s block and no lambda or other block gives it one.
+ */
+private fun givenBefore(
+    src: String,
+    d: Declaration,
+    at: Int,
+): List<Span> {
+    val given = d.assigned.filter { it.start < at }
+    val last = given.maxByOrNull { it.start }?.takeUnless { it.initialiser } ?: return given
+    val facts = fileFacts(src)
+    val block = facts.blockAround(at)
+    // An initialiser is given where the var is declared, whichever block that is.
+    val plain =
+        d.assigned.all { it.initialiser || facts.blockAround(it.assignedAt) == block } &&
+            Operands(src, facts.code).startsStatement(last.assignedAt)
+    return if (plain) listOf(last) else given
+}
 
 /** An `if` or a `when` that an operand opens with. */
 private val BRANCHING = regex("""^(?:if|when)(?![\p{L}\p{Nd}_])""")
@@ -2393,13 +2471,14 @@ internal fun Analyzer.markupLiterals(
                     resultIn(l)?.let { t.length - 1 - l.length + it.first..t.length - 1 - l.length + it.last }
                 }
             when {
-                // `let` and `run` give what their lambda ends with, the receiver where that is it; `also` and `apply` the receiver.
-                scopeCall(call) && (call.name == "let" || call.name == "run") -> {
+                // `let`, `run` and `with` give what their lambda ends with, what they are called on where that is it; `also` and
+                // `apply` what they are called on.
+                scopeCall(src, call) && call.name !in GIVE_WHAT_THEY_ARE_CALLED_ON -> {
                     val lambdaText = call.lambda!!
-                    inT(if (lambdaResult(lambdaText) in scope(src, lambdaText, call.name, false).keys) receiver else lambda)
+                    inT(if (lambdaResult(lambdaText) in scope(src, lambdaText, call.name, false).keys) calledOn(t, call) else lambda)
                 }
 
-                scopeCall(call) || (receiver != null && call.name in KEEPS_TEXT) -> {
+                scopeCall(src, call) || (receiver != null && call.name in KEEPS_TEXT) -> {
                     inT(receiver)
                 }
 
@@ -2418,7 +2497,7 @@ internal fun Analyzer.markupLiterals(
         if (textOf != null) return inT(0 until textOf.groupValues[1].length)
         if (KOTLIN_NAME.matchEntire(t) != null) {
             val d = declarationOf(src, t, a) ?: return
-            val values = if (d.mutable) d.assigned.filter { it.start < a } else listOfNotNull(d.value)
+            val values = if (d.mutable) givenBefore(src, d, a) else listOfNotNull(d.value)
             for (v in values) if (v.end >= 0) reach(v.start, v.end)
             // A val set to a call of Trusted or interpolate keeps no value to read, only where the call starts: the call is read
             // whole, its brackets to where they close.

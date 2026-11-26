@@ -35,7 +35,8 @@ object StreamlordResolve {
     ): KtNameReferenceExpression? {
         val leaf = file.findElementAt(site.nameStart) ?: return null
         val ref = PsiTreeUtil.getParentOfType(leaf, KtNameReferenceExpression::class.java, false) ?: return null
-        if (ref.textRange.startOffset != site.nameStart || ref.getReferencedName() != site.name) return null
+        // By where the name is written, which a call by an alias the file imports names otherwise than the site.
+        if (ref.textRange.startOffset != site.nameStart || ref.textRange.endOffset != site.nameEnd) return null
         val call = ref.parent as? KtCallExpression ?: return null
         if (call.calleeExpression != ref) return null
         return ref
