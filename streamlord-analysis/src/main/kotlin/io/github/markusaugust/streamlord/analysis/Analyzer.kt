@@ -284,7 +284,7 @@ internal class InterpolateBlock(
 )
 
 /** [INTERPOLATE_BLOCK], called by each of [coreNames] of `interpolate`: `import ...interpolate as page`. */
-private fun blockCalls(src: String): Regex {
+internal fun blockCalls(src: String): Regex {
     val names = coreNames(src, "interpolate")
     return if (names.size == 1) INTERPOLATE_BLOCK else interpolateBlock(names.joinToString("|") { Regex.escape(it) })
 }

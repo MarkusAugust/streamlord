@@ -11667,6 +11667,30 @@ interpolate-template 350-352 warning: Kotlin fills in $m before interpolate sees
 == corpus/kotlin-interpolate-block.json: a lambda the block calls in a template under an if may not run
 interpolate-placeholders 303-305 warning: interpolate throws here if it runs while the block around it is still being built: m holds a mark of the interpolate { } around this one, +name, and a mark stands for its value only in the markup of the block that made it, so the value would be lost. Mark the value in this block: ${+name}.
   fix "Mark name in this block" 303-305 "${+name}"
+== corpus/kotlin-interpolate-block.json: the text of interpolate { } in element text of a free string is escaped markup
+== corpus/kotlin-interpolate-block.json: a val set to the text of interpolate { } is escaped markup in element text
+== corpus/kotlin-interpolate-block.json: the text of interpolate { } in Trusted's element text is escaped markup
+== corpus/kotlin-interpolate-block.json: the text of interpolate { } in an attribute value is markup written into it
+unescaped-interpolation 251-292 warning: Kotlin writes ${interpolate { "<b>${+name}</b…} into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup.
+  fix "Mark the values with + in interpolate { }, which escapes the values" 239-301 "interpolate { \"<p title=\\\"${+(interpolate { \"<b>${+name}</b>\" }.text)}\\\">t</p>\" }.text"
+== corpus/kotlin-interpolate-block.json: the text of interpolate { } in a script runs
+unsafe-interpolation 248-289 warning: Kotlin writes ${interpolate { "<b>${+name}</b…} into a script, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there.
+== corpus/kotlin-interpolate-block.json: interpolate { } handed to the placeholder form is an Html
+== corpus/kotlin-interpolate-block.json: the text of interpolate { } handed to the placeholder form is escaped again, its tags printed as text
+interpolate-template 255-257 warning: interpolate escapes interpolate { "<b>${+name}</b… here, so the tags it holds are printed as text: it is markup held as a String. Pass the Html itself, join a list of Html with joinToHtml(), or wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: the text of interpolate { } that gives a value, not a literal, is that value as it is
+unescaped-interpolation 243-271 hint: Kotlin writes ${interpolate { name }.text} into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). Marking the values is not offered here: it would escape this value, which may be markup you built.
+== corpus/kotlin-interpolate-block.json: the text of a block that gives a value, inside another block, is filled in before it
+interpolate-template 257-285 warning: Kotlin fills in ${interpolate { name }.text} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+== corpus/kotlin-interpolate-block.json: a member called interpolate takes the name from core's import, and its .text is its own
+unescaped-interpolation 306-334 hint: Kotlin writes ${interpolate { name }.text} into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). Marking the values is not offered here: it would escape this value, which may be markup you built.
+== corpus/kotlin-interpolate-block.json: a local value called interpolate takes the name from core's import
+unescaped-interpolation 316-344 hint: Kotlin writes ${interpolate { name }.text} into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). Marking the values is not offered here: it would escape this value, which may be markup you built.
+== corpus/kotlin-interpolate-block.json: interpolate { } in a file that imports no interpolate of core's is somebody else's
+unescaped-interpolation 107-135 hint: Kotlin writes ${interpolate { name }.text} into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). Marking the values is not offered here: it would escape this value, which may be markup you built.
+== corpus/kotlin-interpolate-block.json: the text of interpolate { } under an alias is escaped markup
+== corpus/kotlin-interpolate-block.json: the text of interpolate { } written with core's package is escaped markup
+== corpus/kotlin-interpolate-block.json: the text of interpolate(prefixes) { } is escaped markup
 == corpus/kotlin-interpolate.json: a template in the format is filled before interpolate sees it
 interpolate-template 16-22 warning: Kotlin fills in $query before interpolate sees the markup, so interpolate neither escapes nor refuses it. Make it a %s placeholder and pass the value to interpolate.
   fix "Make $query a %s placeholder, which interpolate escapes" 16-22 "%s"

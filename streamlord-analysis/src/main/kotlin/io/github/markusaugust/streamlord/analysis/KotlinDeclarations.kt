@@ -77,8 +77,8 @@ internal class Span(
 }
 
 /**
- * What the analysis needs of a whole file, read once: where the code is (template code included),
- * the names it declares with their scopes, and whether `interpolate` is imported.
+ * What the analysis needs of a whole file, read once: where the code is (template code included)
+ * and the names it declares with their scopes.
  */
 internal class FileFacts(
     val src: String,

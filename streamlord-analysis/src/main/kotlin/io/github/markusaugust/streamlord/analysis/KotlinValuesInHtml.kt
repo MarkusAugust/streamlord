@@ -1449,7 +1449,7 @@ private fun argKind(
     if (coreCall(src, t, "interpolate")) return ArgKind.MARKUP
     // The String of the Html: interpolate(...).text.
     val html = TEXT_OF_VALUE.find(t)?.groupValues?.get(1)
-    if (html != null && coreCall(src, html, "interpolate")) return ArgKind.STRING
+    if (html != null && interpolateCall(src, html)) return ArgKind.STRING
     callKind(src, t, at, emptySet())?.argKind()?.let { return it }
     if (KOTLIN_NAME.matchEntire(t) == null) return null
     // `val name = "Gorvek"`: a String, though no type is written.
