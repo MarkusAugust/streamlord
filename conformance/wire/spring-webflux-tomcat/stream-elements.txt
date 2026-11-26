@@ -16,64 +16,64 @@ Transfer-Encoding: chunked
 Date: {date}
 
 event:datastar-patch-elements
-data:elements <div id="hall">The hall</div>
+data: elements <div id="hall">The hall</div>
 
 event:datastar-patch-elements
-data:selector #hall
-data:elements <div id="hall">The hall, morphed</div>
+data: selector #hall
+data: elements <div id="hall">The hall, morphed</div>
 
 event:datastar-patch-elements
-data:selector #hall
-data:mode inner
-data:elements <p>Inside</p>
+data: selector #hall
+data: mode inner
+data: elements <p>Inside</p>
 
 event:datastar-patch-elements
-data:selector #hall
-data:mode replace
-data:elements <div id="hall">Replaced</div>
+data: selector #hall
+data: mode replace
+data: elements <div id="hall">Replaced</div>
 
 event:datastar-patch-elements
-data:selector #list
-data:mode prepend
-data:elements <li>First</li>
+data: selector #list
+data: mode prepend
+data: elements <li>First</li>
 
 event:datastar-patch-elements
-data:selector #list
-data:mode append
-data:elements <li>Last</li>
+data: selector #list
+data: mode append
+data: elements <li>Last</li>
 
 event:datastar-patch-elements
-data:selector #hall
-data:mode before
-data:elements <hr>
+data: selector #hall
+data: mode before
+data: elements <hr>
 
 event:datastar-patch-elements
-data:selector #hall
-data:mode after
-data:elements <hr>
+data: selector #hall
+data: mode after
+data: elements <hr>
 
 event:datastar-patch-elements
-data:selector #gone
-data:mode remove
+data: selector #gone
+data: mode remove
 
 event:datastar-patch-elements
-data:selector #sky
-data:mode append
-data:namespace svg
-data:elements <circle id="moon" r="4"/>
+data: selector #sky
+data: mode append
+data: namespace svg
+data: elements <circle id="moon" r="4"/>
 
 event:datastar-patch-elements
-data:useViewTransition true
-data:elements <div id="hall">In transition</div>
+data: useViewTransition true
+data: elements <div id="hall">In transition</div>
 
 event:datastar-patch-elements
-data:useViewTransition true
-data:viewTransitionSelector #hall
-data:elements <div id="hall">In transition</div>
+data: useViewTransition true
+data: viewTransitionSelector #hall
+data: elements <div id="hall">In transition</div>
 
 event:datastar-patch-elements
-data:elements <ul id="list">
-data:elements   <li>One</li>
-data:elements   <li>Two</li>
-data:elements </ul>
+data: elements <ul id="list">
+data: elements   <li>One</li>
+data: elements   <li>Two</li>
+data: elements </ul>
 

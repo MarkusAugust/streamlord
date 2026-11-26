@@ -17,16 +17,16 @@ Transfer-Encoding: chunked
 Date: {date}
 
 event:datastar-patch-signals
-data:signals {"hp":100,"name":"Gorvek"}
+data: signals {"hp":100,"name":"Gorvek"}
 
 event:datastar-patch-signals
-data:onlyIfMissing true
-data:signals {"hp":100}
+data: onlyIfMissing true
+data: signals {"hp":100}
 
 event:datastar-patch-signals
-data:signals {
-data:signals   "quest": {
-data:signals     "stage": 2
-data:signals   }
-data:signals }
+data: signals {
+data: signals   "quest": {
+data: signals     "stage": 2
+data: signals   }
+data: signals }
 

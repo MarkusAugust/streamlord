@@ -43,8 +43,9 @@ fun feed(): ResponseEntity<Flow<ServerSentEvent<String>>> =
 ```
 
 The frames are written by Spring's own encoder, so they are spelled Spring's way: no space after
-any colon, `event:datastar-patch-signals`, and `id:` ahead of `event:`. The fields and the data
-are the ones Ktor and WebMVC send, and the Datastar client reads both spellings alike.
+`event:`, `id:` or `retry:`, as in `event:datastar-patch-signals`, and `id:` ahead of `event:`.
+Spring 7.1 writes a space after `data:`, as Ktor and WebMVC do; Spring 7.0 writes none. The fields
+and the data are the ones Ktor and WebMVC send, and the Datastar client reads both spellings alike.
 
 ## The guard
 

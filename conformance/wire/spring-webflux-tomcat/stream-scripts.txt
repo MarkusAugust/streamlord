@@ -16,12 +16,12 @@ Transfer-Encoding: chunked
 Date: {date}
 
 event:datastar-patch-elements
-data:selector body
-data:mode append
-data:elements <script data-effect="el.remove()">console.log('Gorvek enters')</script>
+data: selector body
+data: mode append
+data: elements <script data-effect="el.remove()">console.log('Gorvek enters')</script>
 
 event:datastar-patch-elements
-data:selector body
-data:mode append
-data:elements <script type="module" id="entry">console.log('attributed')</script>
+data: selector body
+data: mode append
+data: elements <script type="module" id="entry">console.log('attributed')</script>
 
