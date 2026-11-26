@@ -26,7 +26,7 @@
 # The context is the repository root, because the artifact path starts at demo/.
 
 # By digest, so the image is the one that was scanned and run in CI, whatever the tag moves to.
-FROM gcr.io/distroless/base-debian13:nonroot@sha256:a08d9054afbaf1af9b90fd02cdc7b32236319b5376d374505a41548d42b0c5db
+FROM gcr.io/distroless/base-debian13:nonroot@sha256:7088bf1cdc94a65af4e0d5ad94518ed489a372dec1ece38ff4411c6c15fb5864
 
 WORKDIR /app
 COPY --chown=nonroot:nonroot demo/build/native/nativeCompile/streamlord-live /app/streamlord-live
