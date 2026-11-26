@@ -109,7 +109,7 @@
  },
  "drawn/kotlin/unescaped-interpolation-3.kt": {
   "corpus": "kotlin-values.json",
-  "case": "a value of a type parameter may be null: no rewrite to interpolate"
+  "case": "a value of a type parameter may be null: the rewrite is offered all the same"
  },
  "drawn/kotlin/unknown-action-1.kt": {
   "corpus": "kotlin.json",
