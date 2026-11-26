@@ -197,7 +197,7 @@ internal fun scope(
     name: String,
     nullable: Boolean,
 ): Map<String, Boolean> {
-    if (name != "let") return mapOf("this" to nullable, "this@$name" to nullable)
+    if (name != "let" && name != "also") return mapOf("this" to nullable, "this@$name" to nullable)
     val head = LAMBDA_HEAD.find(lambda)?.let { it.value.removeSuffix("->").trim() } ?: return mapOf("it" to nullable)
     val parameter = head.substringBefore(':').trim()
     if (KOTLIN_NAME.matchEntire(parameter) == null) return emptyMap()

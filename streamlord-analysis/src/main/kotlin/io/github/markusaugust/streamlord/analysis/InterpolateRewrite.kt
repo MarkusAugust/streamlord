@@ -196,6 +196,35 @@ internal fun coreAliases(src: String): Map<String, String> {
     return facts.aliases ?: aliasesIn(src, facts.code).also { facts.aliases = it }
 }
 
+/**
+ * Core's [name] and each alias the file imports it under that nothing in the file declares again, which would take the
+ * name from the import: `page` of `import ...interpolate as page`.
+ */
+internal fun coreNames(
+    src: String,
+    name: String,
+): Set<String> {
+    val facts = fileFacts(src)
+    val aliases = coreAliases(src).filter { (alias, of) -> of == name && alias !in facts.names && alias !in facts.functions }.keys
+    return aliases + name
+}
+
+/**
+ * The calls in [src] of [names], as [findCallSites] finds them, with a call of `interpolate` by an alias among them, named
+ * `interpolate`: `page(...)` of `import ...interpolate as page`.
+ */
+internal fun interpolateCallSites(
+    src: String,
+    names: Set<String>,
+    lex: KotlinLex,
+): List<CallSite> {
+    val aliases = if ("interpolate" in names) coreNames(src, "interpolate") - "interpolate" else emptySet()
+    if (aliases.isEmpty()) return findCallSites(src, names, lex)
+    return findCallSites(src, names + aliases, lex).map { site ->
+        if (site.name in aliases) site.copy(name = "interpolate", nameEnd = site.nameEnd) else site
+    }
+}
+
 /** The aliases of [coreAliases], read from the imports in the [code] of [src]. */
 internal fun aliasesIn(
     src: String,

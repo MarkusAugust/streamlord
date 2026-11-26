@@ -26,6 +26,9 @@ private const val OPERATOR_CHARS = "=!<>&|?:.+-*/%"
 /** How far back the statement a literal stands in is looked for. */
 private const val REACH = 4000
 
+/** The words a statement after them runs under only where a test is met or a loop goes round; a `when` branch is in braces. */
+private val CONTROL = setOf("if", "else", "for", "while", "do", "try", "catch", "finally")
+
 /** Whether a `+` that joins stands at [at] of [src]: not `++` and not `+=`. */
 internal fun plusAt(
     src: String,
@@ -108,7 +111,7 @@ internal class Operands(
     fun certainStart(to: Int): Int {
         var k = to
         if (src[k - 1] in ")]}" && mask[k - 1]) k = matching(k - 1).takeIf { it >= 0 } ?: return to - 1
-        while (k > 0 && (src[k - 1].isLetterOrDigit() || src[k - 1] == '_')) k--
+        k = wordBefore(k)
         return if (k == to) to - 1 else k
     }
 
@@ -281,6 +284,43 @@ internal class Operands(
         return -1
     }
 
+    /**
+     * Whether a statement of its own starts at [at] that runs whenever what is around it does: none that an `if`, an
+     * `else`, a loop or anything else before it on the way to its block's last statement holds.
+     */
+    fun startsStatement(at: Int): Boolean {
+        val start = startBefore(at)
+        if (start < 0 || skip(start, true) != at) return false
+        val before = skipBack(at)
+        if (before == 0) return true
+        val c = src[before - 1]
+        return when {
+            c == ';' || c == '{' -> true
+
+            // A bracket closes a call, or the test of an `if` or a loop, or an annotation's arguments.
+            c == ')' -> matching(before - 1).let { open -> open >= 0 && plainWordBefore(open) }
+
+            isWordPart(c) -> plainWordBefore(before)
+
+            // Past a literal or a bracket the statement before has ended; past an operator, it goes on in this one.
+            else -> c in "\"']}"
+        }
+    }
+
+    /** Whether the word that ends at [to], past blanks, is no word of [CONTROL] and names no annotation. */
+    private fun plainWordBefore(to: Int): Boolean {
+        val end = skipBack(to)
+        val start = wordBefore(end)
+        return src.substring(start, end) !in CONTROL && ch(start - 1) != '@'
+    }
+
+    /** Where the word that ends at [to] starts: [to] where none does. */
+    private fun wordBefore(to: Int): Int {
+        var k = to
+        while (k > 0 && isWordPart(src[k - 1])) k--
+        return k
+    }
+
     /** Whether a line break before [at] ends nothing: round or square brackets are open around it. */
     fun inBrackets(at: Int): Boolean = openBefore(at).let { it >= 0 && src[it] != '{' }
 
@@ -290,7 +330,7 @@ internal class Operands(
      * ends a statement. That is every one but those a `.name` goes on after or a sign of a sum or a
      * product stands before. -1 where it is out of reach.
      */
-    private fun startBefore(plus: Int): Int {
+    fun startBefore(plus: Int): Int {
         val open = openBefore(plus)
         val block = open < 0 || src[open] == '{'
         var depth = 0

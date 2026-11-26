@@ -27,6 +27,8 @@ public data class CallSite(
     val args: List<Arg>,
     /** `true` when a trailing lambda follows the closing parenthesis. */
     val trailingLambda: Boolean,
+    /** Just past the name as the call writes it: an alias of [name] the file imports may be shorter or longer. */
+    val nameEnd: Int = nameStart + name.length,
 ) {
     public val positional: List<Arg> get() = args.filter { it.named == null }
 
@@ -124,21 +126,35 @@ public class KotlinLex internal constructor(
      * The blocks of code in [src], each from its `{` to its `}`, in the order they open: a block
      * comes after every block it is in. One left open runs to the end of the file.
      */
-    internal fun blocks(src: String): List<IntRange> {
-        val out = ArrayList<IntRange>()
-        val open = ArrayList<Int>()
-        for (i in src.indices) {
-            if (!mask[i]) continue
-            if (src[i] == '{') {
+    internal fun blocks(src: String): List<IntRange> = codeBlocks(src, mask)
+}
+
+/**
+ * The blocks of the [code] of [src], each from its `{` to its `}`, in the order they open: a block comes after every block
+ * it is in, and one left open runs to the end of the file. A template's braces, where [code] holds a template's code, are none.
+ */
+internal fun codeBlocks(
+    src: String,
+    code: BooleanArray,
+): List<IntRange> {
+    val out = ArrayList<IntRange>()
+    // Where each brace still open is among the blocks, -1 for a template's.
+    val open = ArrayList<Int>()
+    for (i in src.indices) {
+        if (!code[i]) continue
+        if (src[i] == '{') {
+            if (src.getOrNull(i - 1) == '$' && !code[i - 1]) {
+                open += -1
+            } else {
                 open += out.size
                 out += i..src.length
-            } else if (src[i] == '}' && open.isNotEmpty()) {
-                val at = open.removeAt(open.lastIndex)
-                out[at] = out[at].first..i
             }
+        } else if (src[i] == '}' && open.isNotEmpty()) {
+            val at = open.removeAt(open.lastIndex)
+            if (at >= 0) out[at] = out[at].first..i
         }
-        return out
     }
+    return out
 }
 
 /** The innermost of [this], blocks as [KotlinLex.blocks] gives them, that holds [at]. */
