@@ -21,16 +21,16 @@ ktorOldest = "3.0.0"
 # has known vulnerabilities; this is the 4.1 release install.md tells a user on Ktor 3.0 to raise
 # it to, so the promise is tested on what users are told to run. It stays on 4.1, the line
 # Ktor 3.0 was built against.
-nettyOldestKtor = "4.1.140.Final"
+nettyOldestKtor = "4.1.141.Final"
 # The same for Ktor 3.0's Tomcat and Jetty engines, which bring Tomcat 10.1.30 and Jetty 11.0.24.
 # 11.0.26 is the last Jetty 11 on Maven Central, and it still has advisories install.md names.
 tomcatOldestKtor = "10.1.61"
 jettyOldestKtor = "11.0.26"
-spring = "7.0.10"
+spring = "7.1.0"
 servlet = "6.1.0"
 # Spring Boot 4.0.8 pins 11.0.24, which has three advisories fixed in 11.0.25; the tests run the current 11.0 line.
 tomcat = "11.0.29"
-reactor = "3.8.8"
+reactor = "3.9.0"
 jackson = "3.3.0"
 jackson2 = "2.23.0"
 # Floors for libraries the build's own tools carry (Dokka, the IntelliJ Platform plugin), raised
