@@ -17,11 +17,11 @@ Date: {date}
 
 id:42
 event:datastar-patch-signals
-data:signals {"hp":99}
+data: signals {"hp":99}
 
 :the gate holds
 
 event:datastar-patch-signals
 retry:1001
-data:signals {"hp":98}
+data: signals {"hp":98}
 

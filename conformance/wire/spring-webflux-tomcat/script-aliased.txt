@@ -16,7 +16,7 @@ Transfer-Encoding: chunked
 Date: {date}
 
 event:datastar-patch-elements
-data:selector body
-data:mode append
-data:elements <script data-star-effect="el.remove()">console.log('aliased')</script>
+data: selector body
+data: mode append
+data: elements <script data-star-effect="el.remove()">console.log('aliased')</script>
 
