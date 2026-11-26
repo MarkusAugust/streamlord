@@ -786,7 +786,7 @@ internal fun markupValue(
         if (on.isMarkup()) return true
         if (on == null && sdk.core &&
             (
-                coreCall(src, textOf, "interpolate") || coreCall(src, textOf, "Trusted") ||
+                interpolateCall(src, textOf) || coreCall(src, textOf, "Trusted") ||
                     (KOTLIN_NAME.matchEntire(textOf) != null && declaredKind(src, textOf, at).isMarkup())
             )
         ) {
@@ -1208,6 +1208,27 @@ internal fun markupHeldAsString(
     return (markupValue(src, value, at) && !heldAsMarkup(src, value, at)) || markupTextValue(src, value, at)
 }
 
+/**
+ * Whether [text] is one call to core's interpolate whose `.text` is escaped markup: the placeholder form, or a block
+ * that gives a string literal. Written bare, the block's name is core's only where the file imports it and declares
+ * no interpolate of its own anywhere.
+ */
+internal fun interpolateCall(
+    src: String,
+    text: String,
+): Boolean {
+    if (coreCall(src, text, "interpolate")) return true
+    val m = blockCalls(src).find(text)?.takeIf { it.range.first == 0 } ?: return false
+    if (closing(text, depths(text), m.range.last) != text.length) return false
+    if (m.groupValues[1] == "interpolate" && !text.startsWith(DOMAIN) &&
+        (shadowsCore(src, "interpolate") || !imports(src, DOMAIN, "interpolate") || declaredInFile(src, "interpolate"))
+    ) {
+        return false
+    }
+    // `interpolate { name }` gives name as the markup itself, escaped by nothing.
+    return statements(text.substring(m.range.last + 1, text.length - 1)).lastOrNull()?.trim()?.let(::stringLiteral) != null
+}
+
 /** Whether [name] means, at [at], a value set to the `.text` of an Html: `val row = interpolate(...).text`. */
 private fun markupText(
     src: String,
@@ -1215,7 +1236,7 @@ private fun markupText(
     at: Int,
 ): Boolean {
     val of = declarationOf(src, name, at)?.textOf ?: return false
-    return wholeCall(of, "interpolate") ||
+    return interpolateCall(src, of) ||
         (KOTLIN_NAME.matchEntire(of) != null && declaredKind(src, of, declarationOf(src, name, at)!!.at).isMarkup())
 }
 

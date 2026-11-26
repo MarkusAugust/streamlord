@@ -205,8 +205,17 @@ internal fun coreNames(
     name: String,
 ): Set<String> {
     val facts = fileFacts(src)
-    val aliases = coreAliases(src).filter { (alias, of) -> of == name && alias !in facts.names && alias !in facts.functions }.keys
+    val aliases = coreAliases(src).filter { (alias, of) -> of == name && !declaredInFile(src, alias) }.keys
     return aliases + name
+}
+
+/** Whether [src] declares [name] anywhere, a member or a local too, which takes the name from an import where it is seen. */
+internal fun declaredInFile(
+    src: String,
+    name: String,
+): Boolean {
+    val facts = fileFacts(src)
+    return name in facts.names || !facts.functions[name].isNullOrEmpty()
 }
 
 /**
@@ -231,14 +240,7 @@ internal fun aliasesIn(
     code: BooleanArray,
 ): Map<String, String> =
     HashMap<String, String>().also { out ->
-        for (line in keywordLines(src, code, "import")) {
-            val t =
-                src
-                    .substring(line.start, line.codeEnd)
-                    .trim()
-                    .removeSuffix(";")
-                    .trim()
-                    .let(::unticked)
+        for (t in importTargets(src, code)) {
             val m = CORE_ALIAS.matchEntire(t) ?: continue
             out[m.groupValues[2]] = m.groupValues[1]
         }
@@ -326,6 +328,20 @@ internal fun markupTypeShadowed(
     return (name == "Html" || name == "Trusted") && shadowsCore(src, name)
 }
 
+/** What each import of [src] names, without its keyword, its backticks or a closing `;`. */
+private fun importTargets(
+    src: String,
+    code: BooleanArray,
+): List<String> =
+    keywordLines(src, code, "import").map {
+        src
+            .substring(it.start, it.codeEnd)
+            .trim()
+            .removeSuffix(";")
+            .trim()
+            .let(::unticked)
+    }
+
 /**
  * Whether something other than core's domain takes [name] in [src]: an import of it from elsewhere,
  * by name or as an alias, or a `fun`, `class`, `object`, `interface` or `typealias` of that name at
@@ -341,15 +357,7 @@ private fun shadowedInFile(
     name: String,
     stars: Boolean = true,
 ): Boolean {
-    val targets =
-        keywordLines(src, code, "import").map {
-            src
-                .substring(it.start, it.codeEnd)
-                .trim()
-                .removeSuffix(";")
-                .trim()
-                .let(::unticked)
-        }
+    val targets = importTargets(src, code)
     if ("$DOMAIN.$name" in targets) return false
     for (t in targets) {
         val alias = t.substringAfter(" as ", "").trim()
@@ -543,6 +551,24 @@ internal fun collectionShown(
 /** The package of streamlord-html, whose helpers the expression fixes write. */
 internal const val HTML_PACKAGE = "io.github.markusaugust.streamlord.html"
 
+/** Whether [src] sees [name] of [pkg] without its package: imported by name or with the whole package, or declared in [pkg]. */
+internal fun imports(
+    src: String,
+    pkg: String,
+    name: String,
+): Boolean {
+    val code = fileFacts(src).code
+    val declaredIn =
+        keywordLines(src, code, "package").firstOrNull()?.let {
+            src
+                .substring(it.start, it.codeEnd)
+                .trim()
+                .removeSuffix(";")
+                .trim()
+        }
+    return declaredIn == pkg || importTargets(src, code).any { it == "$pkg.$name" || it == "$pkg.*" }
+}
+
 /**
  * The edit that imports [name] of [pkg]: after the last import, else after the package line, else
  * after what heads the file ([fileHeaderEnd]), in the file's own line break. None when the file has
@@ -557,17 +583,9 @@ internal fun importEdits(
     val facts = fileFacts(src)
     val fq = "$pkg.$name"
     return facts.importEdits.getOrPut(fq) {
+        if (imports(src, pkg, name)) return@getOrPut emptyList()
         val imports = keywordLines(src, facts.code, "import")
         val pkgLine = keywordLines(src, facts.code, "package").firstOrNull()
-        val target = { line: KeywordLine ->
-            src
-                .substring(line.start, line.codeEnd)
-                .trim()
-                .removeSuffix(";")
-                .trim()
-        }
-        val imported = imports.any { target(it) == fq || target(it) == "$pkg.*" } || pkgLine?.let(target) == pkg
-        if (imported) return@getOrPut emptyList()
         val nl = lineBreak(src)
         val last = imports.lastOrNull()
         if (last != null) return@getOrPut listOf(Edit(last.end, last.end, "${nl}import $fq"))
