@@ -135,7 +135,10 @@ internal fun stringLiteral(t: String): KotlinString? {
 }
 
 /** Whether [t] is one string literal without a template: `"x"`, and `"$"` too, whose dollar opens none. */
-internal fun plainString(t: String): Boolean = STRING_LITERAL.matchEntire(t) != null || stringLiteral(t)?.interpolations?.isEmpty() == true
+internal fun plainString(t: String): Boolean = STRING_LITERAL.matchEntire(t) != null || plainText(t) != null
+
+/** The text of [t] where it is one string literal without a template, as Kotlin reads it; null for anything else. */
+internal fun plainText(t: String): String? = stringLiteral(t)?.takeIf { it.interpolations.isEmpty() }?.text
 
 private fun wordAt(
     e: String,
