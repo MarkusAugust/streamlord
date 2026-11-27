@@ -172,10 +172,22 @@ internal fun Analyzer.interpolateFormat(
     val arg = site.named("format") ?: (if (prefixed) site.positional.getOrNull(1) else null) ?: leading ?: return null
     arg.string?.let { return if (it.unterminated) null else arg to it }
     val first = strings.firstOrNull { it.start == arg.start } ?: return null
-    // A trim call leaves each placeholder where it stood.
-    if (!first.unterminated && trimAfter(src, first)?.text?.let { first.end + it.length } == arg.end) return arg to first
-    val chain = chainFrom(src, first, code ?: lex.mask)?.takeIf { it.end == arg.end } ?: return null
-    return arg to chain
+    return wholeString(src, first, arg.end, code ?: lex.mask)?.let { arg to it }
+}
+
+/**
+ * The literal [first], or the `+` chain it starts, where it runs to [end]: a `trimIndent()` or a `trimMargin()` after
+ * the literal aside, which leaves each placeholder where it stood. [mask] is the lexer's, or the
+ * file's code where the literal is in a template's code.
+ */
+internal fun wholeString(
+    src: String,
+    first: KotlinString,
+    end: Int,
+    mask: BooleanArray,
+): KotlinString? {
+    if (!first.unterminated && (first.end == end || trimAfter(src, first)?.text?.let { first.end + it.length } == end)) return first
+    return chainFrom(src, first, mask)?.takeIf { it.end == end }
 }
 
 /**
@@ -442,7 +454,7 @@ private fun valueKind(
 
 /**
  * The literal of [arg], `Trusted("...")` written whole or a `val` set to it, whose templates all mark a value: null for
- * any other value.
+ * any other value. A `+` chain of literals is read as one, and a trimmed literal as the literal.
  */
 internal fun Analyzer.markedTrustedLiteral(
     src: String,
@@ -450,18 +462,26 @@ internal fun Analyzer.markedTrustedLiteral(
 ): KotlinString? {
     if (KOTLIN_NAME.matchEntire(arg.text.trim()) != null) return trustedSetTo(src, arg)?.let { markedTrustedLiteral(src, it) }
     if (!coreCall(src, arg.text.trim(), "Trusted")) return null
-    val literal = nested(src).firstOrNull { it.start > arg.start && it.end <= arg.end } ?: return null
-    // The literal is the whole of Trusted's argument, a trailing comma after it as a formatter writes one.
-    if (src
-            .substring(literal.end, arg.end)
-            .trim()
-            .removePrefix(",")
-            .trim() != ")"
-    ) {
-        return null
-    }
+    val first = nested(src).firstOrNull { it.start > arg.start && it.end <= arg.end } ?: return null
+    // Trusted's argument runs to its ")", a trailing comma a formatter writes aside, and a trim of its edges after it
+    // moves no mark within the markup.
+    val close = arg.start + arg.text.trimEnd().length - 1
+    val written =
+        src
+            .substring(first.start, close)
+            .trimEnd()
+            .removeSuffix(",")
+            .trimEnd()
+    val end = first.start + written.replace(EDGE_TRIMS, "").length
+    // A call on a literal inside the chain may change its text, which is then not what the source shows.
+    val literal =
+        wholeString(src, first, end, fileFacts(src).code)?.takeIf { it.start == first.start && !it.called && !it.unread }
+            ?: return null
     return literal.takeIf { l -> l.interpolations.isNotEmpty() && l.interpolations.all { markedValue(it) != null } }
 }
+
+/** A `trim()`, `trimStart()` or `trimEnd()` at the end of a string: it takes white space off its edges alone. */
+private val EDGE_TRIMS = regex("""(?:\s*\.\s*trim(?:Start|End)?\s*\(\s*\))+\s*$""")
 
 /** The call to `Trusted` that the `val` [arg] names is set to, and nothing more. */
 private fun Analyzer.trustedSetTo(
@@ -539,7 +559,11 @@ private fun Analyzer.judgeInterpolated(
             val text = trustedLiteral(src, a.text, s.start)
             val literal = if (text == null && inHtml != null) markedTrustedLiteral(src, a) else null
             if (literal != null) marked[format.interpolations.size + k] = literal
-            if (text == null && literal == null) unknown += at[k] else written[format.interpolations.size + k] = text ?: literal!!.text
+            if (text == null && literal == null) {
+                unknown += at[k]
+            } else {
+                written[format.interpolations.size + k] = text ?: markupView(src, literal!!)
+            }
         }
     }
     val read = prefixes ?: listOf(opts.prefix, CatalogNames.PREFIX, CatalogNames.ALIASED_PREFIX).distinct()

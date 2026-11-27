@@ -69,7 +69,8 @@ All notable changes to Streamlord are recorded here. The format follows
 - The placeholder form written in a template's code, `"<p>${interpolate("<b>%s</b>", name)}</p>"`,
   is judged as the placeholder form, where its format was read as free HTML and a `%s` in a
   Datastar attribute was a syntax error. In `interpolate { }`, a value marked in a `Trusted` handed
-  to it is judged where the `Trusted` lands, and a `+Trusted(...)` in its format where it stands.
+  to it is judged where the `Trusted` lands, its literal joined with `+` or trimmed too (#374), and
+  a `+Trusted(...)` in its format where it stands.
   An `Html` of it written unmarked into a quoted attribute, holding a value marked in it, is an
   error with the mark as its fix. A value marked in it is no longer offered as a `%s` value, which
   core would have written without it (#356).
@@ -83,7 +84,8 @@ All notable changes to Streamlord are recorded here. The format follows
   `?:`, `to`, `as Any`, a list, `toString()`, a branch of an `if` (a warning), and the `.text` of
   an `Html` of the placeholder form holding one. Such an `Html` handed on by name or in brackets is
   an error in an attribute, and in a `<textarea>`, a `<title>`, a comment, or where it leaves a tag
-  or an element open, since core escapes it there as it reads it. A mark of an outer block written
+  or an element open, since core escapes it there as it reads it. A literal in a template of its
+  format, `${"<i>"}`, counts as the markup it writes (#374). A mark of an outer block written
   in a block inside it is an error, with the value marked in that block as its fix, and a warning
   where the inner block is a lambda kept for later. A list holding a mark is no longer offered
   written out, and a template holding the block's own mark no longer the `+` that would be refused

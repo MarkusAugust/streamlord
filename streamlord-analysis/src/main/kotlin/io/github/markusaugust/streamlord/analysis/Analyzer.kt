@@ -1006,7 +1006,9 @@ public class Analyzer(
         html: PlaceholderHtml,
     ): String? {
         val (formatArg, format) = interpolateFormat(html.site, src, code) ?: return null
-        if (format.interpolations.any { markedValue(it) == null }) return null
+        // A template of a literal writes the literal's text into the format, markup and all.
+        val written = format.interpolations.associateWith { plainText(it.text.trim()) }
+        if (format.interpolations.any { markedValue(it) == null && written[it] == null }) return null
         val values = html.site.positional.filter { it.start >= formatArg.end }
         // The markup each Trusted value writes, null for any other value.
         val markup =
@@ -1017,7 +1019,7 @@ public class Analyzer(
             buildString {
                 var cut = 0
                 for (ip in format.interpolations.sortedBy { it.decodedStart }) {
-                    append(format.text, cut, ip.decodedStart).append('x')
+                    append(format.text, cut, ip.decodedStart).append(written[ip] ?: "x")
                     cut = ip.decodedStart + PLACEHOLDER.length
                 }
                 append(format.text, cut, format.text.length)
