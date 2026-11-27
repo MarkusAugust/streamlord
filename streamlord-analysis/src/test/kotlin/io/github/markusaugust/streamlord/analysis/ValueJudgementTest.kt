@@ -113,6 +113,71 @@ class ValueJudgementTest {
     }
 
     @Test
+    fun `the text of a block that gives a value of its own is raw though the editor says it is core's Html`() {
+        // Core takes `name` as the markup itself; the type says only whose Html it is.
+        val src =
+            """
+            import io.github.markusaugust.streamlord.core.domain.interpolate
+            fun raw(name: String) = "<p>${'$'}{interpolate { name }.text}</p>"
+            fun nested(title: String) = interpolate { "<p>${'$'}{interpolate { title }.text}</p>" }
+            fun bracketed(id: String) = "<p>${'$'}{(interpolate { id }).text}</p>"
+            fun sum(tag: String) = "<p>${'$'}{interpolate { "<b>" + tag }.text}</p>"
+            fun ok(x: String) = "<p>${'$'}{interpolate { "<b>${'$'}{+x}</b>" }.text}</p>"
+            fun branch(c: Boolean) = "<p>${'$'}{interpolate { if (c) "<b>a</b>" else "<i>b</i>" }.text}</p>"
+            fun choice(c: Boolean) = "<p>${'$'}{interpolate { when { c -> "<b>a</b>"; else -> "<i>b</i>" } }.text}</p>"
+            fun ran(x: String) = "<p>${'$'}{interpolate { run { "<b>${'$'}{+x}</b>" } }.text}</p>"
+            fun trimmed(x: String) = "<p>${'$'}{interpolate { ""${'"'}<b>${'$'}{+x}</b>""${'"'}.trimIndent() }.text}</p>"
+            fun arrow(x: String) = "<p>${'$'}{interpolate { -> "<b>${'$'}{+x}</b>" }.text}</p>"
+            fun lines(c: Boolean, label: String) =
+                "<p>${'$'}{interpolate {
+                    if (c)
+                        label
+                    else
+                        "<b>x</b>"
+                }.text}</p>"
+            fun entries(c: Boolean) =
+                "<p>${'$'}{interpolate {
+                    when {
+                        c ->
+                            "<b>a</b>"
+                        else -> "<i>b</i>"
+                    }
+                }.text}</p>"
+            fun steps(c: Boolean) = "<p>${'$'}{interpolate { if (c) { val a = 1; "<b>x</b>" } else "<i>y</i>" }.text}</p>"
+            fun wrapped() = "<p>${'$'}{(interpolate { "<b>x</b>" }).text}</p>"
+            const val HEADER = "<b>h</b>"
+            fun header() = "<p>${'$'}{interpolate { HEADER }.text}</p>"
+            """.trimIndent()
+        val core = "io.github.markusaugust.streamlord.core.domain.Html"
+
+        fun shown(answer: ((Int, Int) -> ValueAnswer?)?) =
+            analyzer.analyzeKotlin(Source(src, SourceLanguage.KOTLIN, valueAnswer = answer)).map {
+                "${it.code.id} ${it.severity} ${src.substring(it.start, it.end)}"
+            }
+
+        // Where the editor knows the value is a String, an unescaped one is a warning; where nothing is known, a hint.
+        fun expected(unescaped: Severity) =
+            listOf(
+                "unescaped-interpolation $unescaped \${interpolate { name }.text}",
+                "interpolate-template WARNING \${interpolate { title }.text}",
+                "unescaped-interpolation $unescaped \${(interpolate { id }).text}",
+                "unescaped-interpolation $unescaped \${interpolate { \"<b>\" + tag }.text}",
+                "interpolate-template WARNING tag",
+                "unescaped-interpolation $unescaped \${interpolate {\n        if (c)\n            label\n        else\n            \"<b>x</b>\"\n    }.text}",
+            )
+        // The editor answers core's Html for each block, as IntelliJ does; VS Code answers nothing.
+        val ide = {
+            s: Int,
+            e: Int,
+            ->
+            ValueAnswer(if (src.substring(s, e).trimStart('(').startsWith("interpolate {")) core else "kotlin.String")
+        }
+        assertEquals(expected(Severity.WARNING), shown(ide))
+        // The text alone cannot tell what HEADER holds.
+        assertEquals(expected(Severity.HINT) + "unescaped-interpolation HINT \${interpolate { HEADER }.text}", shown(null))
+    }
+
+    @Test
     fun `a declaration the editor found in another file is read as one of this file is`() {
         val src = "fun f() = \"<p>\${badge()}</p>\""
         val shown = { declaration: String? ->

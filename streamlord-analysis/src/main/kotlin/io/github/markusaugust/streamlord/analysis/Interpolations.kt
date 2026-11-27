@@ -286,7 +286,9 @@ internal fun branches(expr: String): List<String>? {
                 k += 2
                 continue
             }
-            if (k == e.length - 1 || (d[k] == 1 && (e[k] == ';' || e[k] == '\n'))) {
+            // A branch may start on the line after its arrow.
+            val atArrow = arrow >= 0 && e[k] == '\n' && (arrow + 2 until k).all { e[it].isWhitespace() }
+            if (k == e.length - 1 || (d[k] == 1 && !atArrow && (e[k] == ';' || e[k] == '\n'))) {
                 if (arrow >= 0) {
                     values += expand(e.substring(arrow + 2, k))
                 } else if (e.substring(entry, k).isNotBlank()) {

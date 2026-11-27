@@ -582,7 +582,7 @@ private val NAME_AT_END = regex("""([\p{L}_][\p{L}\p{Nd}_]*)\s*$""")
 private val SAFE_CALL_DOT = regex("""\??\.$""")
 private val LAMBDA_HEAD =
     regex(
-        """^\s*(?:\([^()]*\)|[\p{L}_][\p{L}\p{Nd}_]*)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?(?:\s*,\s*(?:\([^()]*\)|[\p{L}_][\p{L}\p{Nd}_]*)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?)*\s*->""",
+        """^\s*(?:(?:\([^()]*\)|[\p{L}_][\p{L}\p{Nd}_]*)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?(?:\s*,\s*(?:\([^()]*\)|[\p{L}_][\p{L}\p{Nd}_]*)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?)*)?\s*->""",
     )
 private val ENDS_IN_OPERATOR = regex("""[-+*/%=<>&|?:.,(]$""")
 private val STARTS_WITH_OPERATOR = regex("""^(?:[*/%&|?:.]|else\b)""")
@@ -698,11 +698,10 @@ private fun statements(body: String): List<String> {
         if (d[k] != 0 || (b[k] != '\n' && b[k] != ';')) continue
         val before = b.substring(from, k).trim()
         val after = b.substring(k + 1).trimStart()
-        if (b[k] == '\n' &&
-            (ENDS_IN_OPERATOR.containsMatchIn(before) || STARTS_WITH_OPERATOR.containsMatchIn(after) || before.isEmpty())
-        ) {
-            continue
-        }
+        val goesOn =
+            ENDS_IN_OPERATOR.containsMatchIn(before) || STARTS_WITH_OPERATOR.containsMatchIn(after) || before.isEmpty() ||
+                branchHead(before)
+        if (b[k] == '\n' && goesOn) continue
         if (before.isNotEmpty()) out += before
         from = k + 1
     }
@@ -712,6 +711,21 @@ private fun statements(body: String): List<String> {
         .takeIf { it.isNotEmpty() }
         ?.let { out += it }
     return out
+}
+
+private val ELSE_END = regex("""(?:^|[\s}])else$""")
+private val IF_OPEN = regex("""\bif\s*\(""")
+
+/** Whether [line] ends in the head of an `if` or an `else` whose branch is on the next line: `if (c)`, `} else`, `else if (c)`. */
+private fun branchHead(line: String): Boolean {
+    if (ELSE_END.containsMatchIn(line)) return true
+    val open =
+        IF_OPEN
+            .findAll(line)
+            .lastOrNull()
+            ?.range
+            ?.last ?: return false
+    return closing(line, depths(line), open) == line.length
 }
 
 /** What a lambda gives: its last expression. */
@@ -783,7 +797,8 @@ internal fun markupValue(
     // The text of an Html or the html of a Trusted, the markup each holds; neither has the other.
     if (textOf != null) {
         val on = editor?.fact(textOf)
-        if (on.isMarkup()) return true
+        // The editor's answer that it is core's Html does not say what the block gives.
+        if (on.isMarkup() && !rawBlock(src, textOf, at)) return true
         if (on == null && sdk.core &&
             (
                 interpolateCall(src, textOf) || coreCall(src, textOf, "Trusted") ||
@@ -1215,18 +1230,79 @@ internal fun markupHeldAsString(
  */
 internal fun interpolateCall(
     src: String,
-    text: String,
+    value: String,
 ): Boolean {
+    val text = unparen(value)
     if (coreCall(src, text, "interpolate")) return true
-    val m = blockCalls(src).find(text)?.takeIf { it.range.first == 0 } ?: return false
-    if (closing(text, depths(text), m.range.last) != text.length) return false
+    val m = wholeBlockCall(src, text) ?: return false
     if (m.groupValues[1] == "interpolate" && !text.startsWith(DOMAIN) &&
         (shadowsCore(src, "interpolate") || !imports(src, DOMAIN, "interpolate") || declaredInFile(src, "interpolate"))
     ) {
         return false
     }
-    // `interpolate { name }` gives name as the markup itself, escaped by nothing.
-    return statements(text.substring(m.range.last + 1, text.length - 1)).lastOrNull()?.trim()?.let(::stringLiteral) != null
+    return blockGives(src, text, m, -1) == true
+}
+
+/** The call of [text] when all of it is one `interpolate { }` block, by any of the names the file gives it. */
+private fun wholeBlockCall(
+    src: String,
+    text: String,
+): MatchResult? {
+    val m = blockCalls(src).find(text)?.takeIf { it.range.first == 0 } ?: return null
+    return m.takeIf { closing(text, depths(text), m.range.last) == text.length }
+}
+
+/** Whether [value] is one `interpolate { }` block that gives a value of its own, which core takes as the markup itself. */
+private fun rawBlock(
+    src: String,
+    value: String,
+    at: Int,
+): Boolean {
+    val text = unparen(value)
+    return wholeBlockCall(src, text)?.let { blockGives(src, text, it, at) } == false
+}
+
+/** What the block [m] opens in [text] gives, as [authored] reads it, its names as they are declared at [at]. */
+private fun blockGives(
+    src: String,
+    text: String,
+    m: MatchResult,
+    at: Int,
+): Boolean? = authored(src, lambdaResult(text.substring(m.range.last + 1, text.length - 1)), at)
+
+/**
+ * Whether [value] is markup the author wrote: true for a string literal, trimmed or not, and for an `if`, a `when`, a
+ * `run { }` or a sum of only such; false where it gives a name declared a String at [at], which may come from outside,
+ * `interpolate { name }`; null where the text cannot tell.
+ */
+private fun authored(
+    src: String,
+    value: String,
+    at: Int,
+): Boolean? {
+    val t = unparen(value)
+    if (t.isEmpty()) return null
+    if (stringLiteral(t) != null) return true
+
+    fun all(values: List<String>): Boolean? {
+        val read = values.map { authored(src, it, at) }
+        return when {
+            false in read -> false
+            null in read -> null
+            else -> true
+        }
+    }
+    statements(t).takeIf { it.size > 1 }?.let { return authored(src, it.last(), at) }
+    branches(t)?.let { return all(it) }
+    splitTop(t, "+").takeIf { it.size > 1 }?.let { return all(it) }
+    TRIM_CALL.findAll(t).lastOrNull()?.takeIf { it.range.last == t.length - 1 }?.let {
+        return authored(src, t.substring(0, it.range.first), at)
+    }
+    lastCall(t)?.takeIf { it.name == "run" && it.receiver == null && it.lambda != null }?.let {
+        return authored(src, lambdaResult(it.lambda!!), at)
+    }
+    val kind = if (KOTLIN_NAME.matchEntire(t) != null && at >= 0) declaredKind(src, t, at) else null
+    return if (kind == ValueFact.STRING || kind == ValueFact.NULLABLE_STRING) false else null
 }
 
 /** Whether [name] means, at [at], a value set to the `.text` of an Html: `val row = interpolate(...).text`. */
