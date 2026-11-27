@@ -11691,6 +11691,18 @@ unescaped-interpolation 107-135 hint: Kotlin writes ${interpolate { name }.text}
 == corpus/kotlin-interpolate-block.json: the text of interpolate { } under an alias is escaped markup
 == corpus/kotlin-interpolate-block.json: the text of interpolate { } written with core's package is escaped markup
 == corpus/kotlin-interpolate-block.json: the text of interpolate(prefixes) { } is escaped markup
+== corpus/kotlin-interpolate-block.json: the text of a block whose if gives only literals is escaped markup
+== corpus/kotlin-interpolate-block.json: the text of a block whose when gives only literals is escaped markup
+== corpus/kotlin-interpolate-block.json: the text of a block whose run gives a literal is escaped markup
+== corpus/kotlin-interpolate-block.json: the text of a block that gives a trimmed literal is escaped markup
+== corpus/kotlin-interpolate-block.json: the text of a block that adds a value to a literal is markup as it is
+unescaped-interpolation 243-279 hint: Kotlin writes ${interpolate { "<b>" + name }.…} into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). Marking the values is not offered here: it would escape this value, which may be markup you built.
+interpolate-template 267-271 warning: Kotlin fills in the value `name` before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+  fix "Mark the value `name` with +, which interpolate escapes" 267-271 "+name"
+== corpus/kotlin-interpolate-block.json: the text of a block whose if gives a value on its own line is that value as it is
+unescaped-interpolation 243-318 hint: Kotlin writes ${interpolate { if (c) name els…} into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). Marking the values is not offered here: it would escape this value, which may be markup you built.
+== corpus/kotlin-interpolate-block.json: the text of a block whose when gives literals on the lines after the arrows is escaped markup
+== corpus/kotlin-interpolate-block.json: the text of a block in brackets that gives a literal is escaped markup
 == corpus/kotlin-interpolate.json: a template in the format is filled before interpolate sees it
 interpolate-template 16-22 warning: Kotlin fills in $query before interpolate sees the markup, so interpolate neither escapes nor refuses it. Make it a %s placeholder and pass the value to interpolate.
   fix "Make $query a %s placeholder, which interpolate escapes" 16-22 "%s"
