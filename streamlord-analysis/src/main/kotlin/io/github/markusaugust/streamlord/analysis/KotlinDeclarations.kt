@@ -1447,7 +1447,7 @@ private fun closesCondition(
 }
 
 /** [src] with each comment blank, one space for each of its characters but a line break, so that every offset holds. */
-private fun withoutComments(
+internal fun withoutComments(
     src: String,
     comments: BooleanArray,
 ): String = CharArray(src.length) { if (comments.getOrElse(it) { false } && src[it] != '\n') ' ' else src[it] }.concatToString()

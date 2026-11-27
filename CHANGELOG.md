@@ -134,11 +134,12 @@ All notable changes to Streamlord are recorded here. The format follows
   is no longer hinted as unescaped: the `.text` of a block that gives a string literal is escaped
   markup, as the `.text` of the placeholder form was. So is a `val` set to it, and the block under
   an alias or written with core's package, and so is a block whose `if`, `when` or `run { }` gives
-  only literals, or that gives a literal with `trimIndent()` or `trimMargin()`. Written bare,
-  `interpolate` must be imported from core and declared nowhere else in the file. A block that
-  gives anything else, `interpolate { name }`, gives it as markup, and is hinted as before. In
-  IntelliJ, which knows `name` is a String, it is a warning, where it was silent (#376). In an
-  attribute value the `.text` is a warning where it was a hint, as the placeholder form's is.
+  only literals, or that gives a literal with `trimIndent()` or `trimMargin()`, through a `val`
+  set to the block too, and through a `when` branch that is an `if` over several lines (#374).
+  Written bare, `interpolate` must be imported from core and declared nowhere else in the file. A
+  block that gives anything else, `interpolate { name }`, gives it as markup, and is hinted as
+  before. In IntelliJ, which knows `name` is a String, it is a warning, where it was silent (#376).
+  In an attribute value the `.text` is a warning where it was a hint, as the placeholder form's is.
   Handed to the placeholder form, it is warned of as escaped twice (#339).
 - A value may be null where the calls it ends in show it, as the Kotlin compiler types it:
   `s.takeIf { c }`, `q.let { v -> v }`, `q?.plus(s ?: "")` and `xs.first()` of a

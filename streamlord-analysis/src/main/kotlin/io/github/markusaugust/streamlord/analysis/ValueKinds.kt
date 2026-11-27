@@ -585,7 +585,7 @@ private val LAMBDA_HEAD =
         """^\s*(?:(?:\([^()]*\)|[\p{L}_][\p{L}\p{Nd}_]*)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?(?:\s*,\s*(?:\([^()]*\)|[\p{L}_][\p{L}\p{Nd}_]*)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?)*)?\s*->""",
     )
 private val ENDS_IN_OPERATOR = regex("""[-+*/%=<>&|?:.,(]$""")
-private val STARTS_WITH_OPERATOR = regex("""^(?:[*/%&|?:.]|else\b)""")
+private val STARTS_WITH_OPERATOR = regex("""^(?:[*/%&|?:.]|else\b(?!\s*->))""")
 internal val PROPERTY_CHAIN = regex("""^[\p{L}_][\p{L}\p{Nd}_]*(?:\s*\??\.\s*[\p{L}_][\p{L}\p{Nd}_]*)*(?:!!)?$""")
 private val MARKUP_CHARS = regex("""[<&]""")
 
@@ -697,11 +697,7 @@ private fun statements(body: String): List<String> {
     for (k in b.indices) {
         if (d[k] != 0 || (b[k] != '\n' && b[k] != ';')) continue
         val before = b.substring(from, k).trim()
-        val after = b.substring(k + 1).trimStart()
-        val goesOn =
-            ENDS_IN_OPERATOR.containsMatchIn(before) || STARTS_WITH_OPERATOR.containsMatchIn(after) || before.isEmpty() ||
-                branchHead(before)
-        if (b[k] == '\n' && goesOn) continue
+        if (b[k] == '\n' && goesOn(before, b.substring(k + 1).trimStart())) continue
         if (before.isNotEmpty()) out += before
         from = k + 1
     }
@@ -715,6 +711,16 @@ private fun statements(body: String): List<String> {
 
 private val ELSE_END = regex("""(?:^|[\s}])else$""")
 private val IF_OPEN = regex("""\bif\s*\(""")
+
+/**
+ * Whether a line break after [before], code without comments, goes on with the expression whose [after] is the code past
+ * it: after an operator or the head of an `if`, before an operator or an `else`. The `else ->` of a `when` starts a branch.
+ */
+internal fun goesOn(
+    before: String,
+    after: String,
+): Boolean =
+    before.isEmpty() || ENDS_IN_OPERATOR.containsMatchIn(before) || STARTS_WITH_OPERATOR.containsMatchIn(after) || branchHead(before)
 
 /** Whether [line] ends in the head of an `if` or an `else` whose branch is on the next line: `if (c)`, `} else`, `else if (c)`. */
 private fun branchHead(line: String): Boolean {
@@ -1242,8 +1248,8 @@ internal fun markupHeldAsString(
 }
 
 /**
- * Whether [text] is one call to core's interpolate whose `.text` is escaped markup: the placeholder form, or a block
- * that gives a string literal. Written bare, the block's name is core's only where the file imports it and declares
+ * Whether [value], or the `val` it names, is one call to core's interpolate whose `.text` is escaped markup: the
+ * placeholder form, or a block that gives a string literal. Written bare, the block's name is core's only where the file imports it and declares
  * no interpolate of its own anywhere.
  */
 internal fun interpolateCall(
@@ -1251,9 +1257,9 @@ internal fun interpolateCall(
     value: String,
     at: Int,
 ): Boolean {
-    val text = unparen(value)
+    val (text, where) = blockText(src, value, at)
     if (coreCall(src, text, "interpolate")) return true
-    val m = wholeBlockCall(src, text, at) ?: return false
+    val m = wholeBlockCall(src, text, where) ?: return false
     if (m.groupValues[1] == "interpolate" && !text.startsWith(DOMAIN) &&
         (!imports(src, DOMAIN, "interpolate") || declaredInFile(src, "interpolate"))
     ) {
@@ -1273,14 +1279,29 @@ private fun wholeBlockCall(
     return m.takeIf { closing(text, depths(text), m.range.last) == text.length }
 }
 
-/** Whether [value] is one `interpolate { }` block that gives a value of its own, which core takes as the markup itself. */
+/** Whether [value], or the `val` it names, is one `interpolate { }` block that gives a value of its own, which core takes as the markup itself. */
 private fun rawBlock(
     src: String,
     value: String,
     at: Int,
 ): Boolean {
+    val (text, where) = blockText(src, value, at)
+    return wholeBlockCall(src, text, where)?.let { blockGives(src, text, it, where) } == false
+}
+
+/**
+ * [value] without brackets, and [at], where it is written; where it names a `val`, what that is set to and where:
+ * `interpolate { name }` of `val h = interpolate { name }`.
+ */
+private fun blockText(
+    src: String,
+    value: String,
+    at: Int,
+): Pair<String, Int> {
     val text = unparen(value)
-    return wholeBlockCall(src, text, at)?.let { blockGives(src, text, it, at) } == false
+    if (KOTLIN_NAME.matchEntire(text) == null) return text to at
+    val set = declarationOf(src, text, at)?.let { valueOf(src, it) } ?: return text to at
+    return unparen(set.text) to set.start
 }
 
 /** What the block [m] opens in [text] gives, as [authored] reads it, its names as they are declared at [at]. */
