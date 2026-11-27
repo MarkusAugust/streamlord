@@ -224,14 +224,15 @@ internal fun closing(
 /** A call that makes a list, a set or an array of the values it is given. */
 private val COLLECTION_CALL =
     regex(
-        """^(?:listOf|mutableListOf|arrayListOf|setOf|mutableSetOf|arrayOf|(?:int|long|short|byte|double|float|boolean|char)ArrayOf)""" +
+        """(?<![\p{L}\p{Nd}_.])""" +
+            """(?:listOf|mutableListOf|arrayListOf|setOf|mutableSetOf|arrayOf|(?:int|long|short|byte|double|float|boolean|char)ArrayOf)""" +
             """\s*(?:<[^()]*>)?\s*\(""",
     )
 
 /** The elements of [text] when it is one call that makes a list, a set or an array of them, `listOf(a, b)`; null otherwise. */
 internal fun collectionElements(text: String): List<String>? {
     val t = text.trim()
-    val open = (COLLECTION_CALL.find(t) ?: return null).value.length - 1
+    val open = (COLLECTION_CALL.matchAt(t, 0) ?: return null).range.last
     if (closing(t, depths(t), open) != t.length) return null
     return splitTop(t.substring(open + 1, t.length - 1), ",").map { it.trim() }.filter { it.isNotEmpty() }
 }
@@ -354,7 +355,8 @@ internal fun chainFrom(
             for (ip in lit.interpolations) interpolations += ip.copy(decodedStart = ip.decodedStart + text.length)
             for (c in lit.text.indices) map += lit.map[c]
             text.append(lit.text)
-            literals += lit
+            // A list joined with literals is read from them.
+            literals += lit.literals.ifEmpty { listOf(lit) }
             end = lit.end
             contentEnd = lit.contentEnd
             // The calls and indexes after a literal, `.trim()`, `[0]`, `!!`, are that literal's alone.
@@ -427,6 +429,147 @@ internal fun chainFrom(
         unread = unread,
     )
 }
+
+/** The parameters of `joinToString` that a literal is read for, in their order: what goes between, before and after. */
+private val JOIN_PARAMETERS = listOf("separator", "prefix", "postfix")
+
+/**
+ * `listOf(a, b).joinToString(separator, prefix, postfix)` from [from], read as one string: the prefix, each value with
+ * the separator between, the postfix, as a `+` chain of them is read ([chainFrom]), each value a placeholder. Read only
+ * where each value is marked with `+` or a name, and the separator, the prefix and the postfix are literals or left to
+ * their defaults; null for anything else, a transform or a limit among them. [mask] marks the file's code.
+ */
+internal fun joinedString(
+    src: String,
+    from: Int,
+    mask: BooleanArray,
+): KotlinString? {
+    val read = Operands(src, mask)
+    val open = COLLECTION_CALL.matchAt(src, from)?.range?.last ?: return null
+    val list = parseArgs(src, open) ?: return null
+    val values = list.args.map { uncommented(src, it) }
+    if (list.trailingLambda || values.isEmpty()) return null
+    if (values.any { marked(it.text) == null && KOTLIN_NAME.matchEntire(it.text) == null }) return null
+    val dot = read.skip(list.closeParen + 1, true)
+    val name = read.skip(dot + 1, true)
+    if (src.getOrNull(dot) != '.' || read.word(name) != "joinToString") return null
+    val paren = read.skip(name + "joinToString".length, false)
+    if (src.getOrNull(paren) != '(') return null
+    val args = parseArgs(src, paren) ?: return null
+    if (args.trailingLambda || args.args.size > JOIN_PARAMETERS.size) return null
+    val given = HashMap<String, KotlinString>()
+    for ((k, a) in args.args.withIndex()) {
+        val parameter = a.named ?: JOIN_PARAMETERS[k]
+        if (parameter !in JOIN_PARAMETERS || parameter in given) return null
+        // A trim or a comment after the literal leaves it no argument of its own.
+        given[parameter] = a.string?.takeIf { it.end == a.end && !it.unterminated } ?: return null
+    }
+    // The separator is written once for each value after the first: a template in it would be filled in each time.
+    val separator = given["separator"]
+    if (separator != null && separator.interpolations.isNotEmpty() && values.size > 1) return null
+    val text = StringBuilder()
+    val map = ArrayList<Int>()
+    val interpolations = ArrayList<Interpolation>()
+
+    fun literal(l: KotlinString) {
+        for (ip in l.interpolations) interpolations += ip.copy(decodedStart = ip.decodedStart + text.length)
+        for (c in l.text.indices) map += l.map[c]
+        text.append(l.text)
+    }
+    given["prefix"]?.let { literal(it) }
+    for ((k, v) in values.withIndex()) {
+        if (k > 0) {
+            if (separator != null) {
+                literal(separator)
+            } else {
+                repeat(DEFAULT_SEPARATOR.length) { map += name }
+                text.append(DEFAULT_SEPARATOR)
+            }
+        }
+        interpolations += Interpolation(v.start, v.end, InterpolationKind.OPERAND, v.text, text.length)
+        repeat(PLACEHOLDER.length) { map += v.start }
+        text.append(PLACEHOLDER)
+    }
+    given["postfix"]?.let { literal(it) }
+    map += args.closeParen
+    val literals = args.args.mapNotNull { it.string }
+    return KotlinString(
+        start = from,
+        end = args.closeParen + 1,
+        raw = false,
+        dollars = 1,
+        contentStart = from,
+        contentEnd = args.closeParen,
+        text = text.toString(),
+        map = map.toIntArray(),
+        interpolations = interpolations,
+        unterminated = false,
+        nested = literals.flatMap { it.nested },
+        literals = literals,
+    )
+}
+
+/** Every [joinedString] of [src], where its collection's call stands in the code [mask] marks. */
+internal fun joinedStrings(
+    src: String,
+    mask: BooleanArray,
+): List<KotlinString> =
+    COLLECTION_CALL
+        .findAll(src)
+        .mapNotNull { m ->
+            m.range.first
+                .takeIf { mask[it] }
+                ?.let { joinedString(src, it, mask) }
+        }.toList()
+
+/**
+ * [s] with each template or value of it that is a [joinedString] written out in place: its text, and its values where
+ * they land in it. The literals of those are among [KotlinString.literals]. [mask] marks the file's code.
+ */
+internal fun withJoined(
+    src: String,
+    s: KotlinString,
+    mask: BooleanArray,
+): KotlinString {
+    val joined =
+        s.interpolations.associateWith { ip ->
+            if (ip.kind == InterpolationKind.SIMPLE || ip.unread) return@associateWith null
+            codeSpan(src, ip, ip.text.trim())?.let { c -> joinedString(src, c.first, mask)?.takeIf { it.end == c.last + 1 } }
+        }
+    if (joined.values.all { it == null }) return s
+    val text = StringBuilder()
+    val map = ArrayList<Int>()
+    val interpolations = ArrayList<Interpolation>()
+    var cut = 0
+    for (ip in s.interpolations) {
+        val j = joined[ip]
+        for (c in cut until ip.decodedStart) map += s.map[c]
+        text.append(s.text, cut, ip.decodedStart)
+        if (j == null) {
+            interpolations += ip.copy(decodedStart = text.length)
+            for (c in ip.decodedStart until ip.decodedStart + PLACEHOLDER.length) map += s.map[c]
+            text.append(PLACEHOLDER)
+        } else {
+            for (inner in j.interpolations) interpolations += inner.copy(decodedStart = inner.decodedStart + text.length)
+            for (c in j.text.indices) map += j.map[c]
+            text.append(j.text)
+        }
+        cut = ip.decodedStart + PLACEHOLDER.length
+    }
+    for (c in cut..s.text.length) map += s.map[c]
+    text.append(s.text, cut, s.text.length)
+    val inner = joined.values.filterNotNull()
+    return s.copy(
+        text = text.toString(),
+        map = map.toIntArray(),
+        interpolations = interpolations,
+        nested = s.nested.filter { n -> inner.none { n.start in it.start until it.end } } + inner.flatMap { it.nested },
+        literals = (s.literals.ifEmpty { listOf(s) }) + inner.flatMap { it.literals },
+    )
+}
+
+/** What `joinToString` writes between two values where no separator is given. */
+private const val DEFAULT_SEPARATOR = ", "
 
 /** What a value handed to `interpolate` is, as far as the text shows: what core's `admits` decides by. */
 internal enum class ArgKind { STRING, NUMBER, UNSIGNED, BOOLEAN, NULL, CHAR, TRUSTED, MARKUP }

@@ -228,13 +228,13 @@ public fun findCallSites(
     return sites
 }
 
-private class ParsedArgs(
+internal class ParsedArgs(
     val closeParen: Int,
     val args: List<Arg>,
     val trailingLambda: Boolean,
 )
 
-private fun parseArgs(
+internal fun parseArgs(
     src: String,
     openParen: Int,
 ): ParsedArgs? {

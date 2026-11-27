@@ -608,27 +608,54 @@ public class Analyzer(
         // A literal joined to values with `+` is read as one string with a placeholder for each value.
         val chained = HashSet<Int>()
         val topLevel = lex.strings.mapTo(HashSet()) { it.start }
+        // The lists joined with literals by joinToString, by where each of their literals starts.
+        val joinedBy by lazy(LazyThreadSafetyMode.NONE) {
+            if ("joinToString" !in
+                src
+            ) {
+                emptyMap()
+            } else {
+                joinedStrings(src, facts.code).flatMap { j -> j.literals.map { it.start to j } }.toMap()
+            }
+        }
+
+        fun joinedAround(s: KotlinString) = joinedBy[s.start]
         for (s in withNested(lex.strings)) {
             if (s.start in claimed || s.start in chained || s.unterminated) continue
+            val innermost = innermostAt(s.start)
+            val mask = if (s.start in topLevel) lex.mask else facts.code
+            val read = Operands(src, mask)
+
+            // A call after a string may change its text, marks and all: a list joined in it is then not read.
+            fun keepsText(k: KotlinString) = !k.called && read.postfixEnd(k.end, false) == k.end
+
+            // In a block, a literal handed to joinToString is read with the list it joins, and a list joined in a template
+            // or a sum is written out where it stands: in a template the string around it reads it, where it is known.
+            // What the block gives, its markup for certain: a list joined anywhere else may not reach it.
+            fun given(at: Int) = innermost != null && at in reached.getOrPut(innermost) { markupLiterals(src, innermost.braces) }
+            val joins = innermost != null && s.start in topLevel
+            val list = if (joins) joinedAround(s)?.takeIf { given(it.start) } else null
+            val listChain = list?.let { chainFrom(src, it, mask) }
+            val first = if (list != null && keepsText(listChain ?: list)) list else s
             // A literal inside a template is joined to its neighbours in the template's code.
-            val chain = chainFrom(src, s, if (s.start in topLevel) lex.mask else facts.code)
-            val whole = chain ?: s
+            val chain = if (first === list) listChain else chainFrom(src, s, mask)
+            val whole = (chain ?: first).let { if (joins && given(s.start) && keepsText(it)) withJoined(src, it, facts.code) else it }
             // The chain's own literals are read with it; one in a value it joins, or in a template, is a string of its own.
-            if (chain != null) for (l in chain.literals) chained += l.start
+            if (whole !== s) for (l in whole.literals) chained += l.start
             // The innermost block a literal stands in reads it, where it is markup or marks a value: its call is the
             // issues' site, so a host that resolves calls can say it is somebody else's.
             val trusted = facts.trustedAt(s.start)
-            val innermost = innermostAt(s.start)
             val html = innermost?.let { b -> htmls.firstOrNull { it.block === b && it.holds(trusted) } }
             val block = innermost?.takeUnless { html == null && inMarkedValue(src, lex.strings, s, it.braces, trusted) }
             if (block != null && (isHtmlString(src, s) || '<' in whole.text || whole.interpolations.any { markedValue(it) != null })) {
-                // The literal of the chain an offset is written in.
-                fun literalOf(at: Int) = whole.literals.firstOrNull { at in it.start until it.end } ?: s
+                // The literal of the chain an offset is written in; a list joined with literals is one string, read whole.
+                fun literalOf(at: Int) = whole.literals.firstOrNull { at in it.start until it.end && joinedAround(it) == null } ?: first
                 // A quote of the Html's own markup may end the attribute it lands in and put its mark in element text.
                 val held = { at: Int ->
                     val h = htmls.firstOrNull { it.givenAt == at }
                     h?.let { marksHeld(src, opts, it) }?.let { it && !h.quotes }
                 }
+                // A separator a joined list writes between each two values stands once in the source, said of once.
                 val issues =
                     checkInterpolateBlock(
                         whole,
@@ -646,7 +673,7 @@ public class Analyzer(
                         reaches = { at -> literalOf(at).start in reached.getOrPut(block) { markupLiterals(src, block.braces) } },
                         discarded = { at -> discarded(src, facts, literalOf(at), block.braces) },
                         later = { at -> runsLater(src, facts.code, at, block.braces.first) },
-                    )
+                    ).distinct()
                 if (issues.isNotEmpty()) out += SiteIssues(block.site, whole, issues)
                 continue
             }

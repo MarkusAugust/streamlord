@@ -11720,6 +11720,51 @@ interpolate-placeholders 290-328 error: interpolate throws here: interpolate("<b
 == corpus/kotlin-interpolate-block.json: a Trusted of a literal with its end trimmed is read in place
 unsafe-interpolation 308-316 error: interpolate throws here: name is marked in an Html the placeholder form builds, and lands in title, outside element text. The block cannot know the data-* prefixes that Html is built with, so a value marked in it may stand in element text alone. Hand the value to that placeholder form as one of its own values, at a %s placeholder, which judges it where it lands.
 == corpus/kotlin-interpolate-block.json: a Trusted of literals joined after a call on one is not read in place, since the call may change its text
+== corpus/kotlin-interpolate-block.json: a mark a joinToString puts in a script between its prefix and postfix is refused
+unsafe-interpolation 260-265 error: interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a mark a joinToString puts in a script by named prefix and postfix is refused
+unsafe-interpolation 260-265 error: interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a mark a joinToString puts in an event handler is refused
+unsafe-interpolation 260-265 error: interpolate always throws here: name lands in onclick, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a mark of a val a joinToString puts in a script is refused
+unsafe-interpolation 275-276 error: interpolate always throws here: m lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a mark of an array a joinToString puts in a script is refused
+unsafe-interpolation 261-266 error: interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a mark a joinToString puts in element text is let in
+== corpus/kotlin-interpolate-block.json: a mark a joinToString puts in an attribute value is let in
+== corpus/kotlin-interpolate-block.json: marks a joinToString separates with markup are let in
+== corpus/kotlin-interpolate-block.json: a joinToString held as text in a script of the block puts its mark there, and it is refused
+unsafe-interpolation 271-276 error: interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a joinToString of a val held as text in a script of the block puts its mark there, and it is refused
+unsafe-interpolation 286-287 error: interpolate always throws here: m lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a joinToString joined with + in a script of the block puts its mark there, and it is refused
+unsafe-interpolation 273-278 error: interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a joinToString held as text in element text of the block keeps its mark
+== corpus/kotlin-interpolate-block.json: a joinToString with a transform is not read, its text not known
+== corpus/kotlin-interpolate-block.json: a joinToString handed to println is not read, since it goes to no markup
+== corpus/kotlin-interpolate-block.json: a joinToString with a call after it is not read, since the call may change its text
+== corpus/kotlin-interpolate-block.json: a value a joinToString writes unmarked is filled in by Kotlin before interpolate sees the markup
+interpolate-template 260-264 warning: Kotlin fills in the value `name` before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+  fix "Mark the value `name` with +, which interpolate escapes" 260-264 "+name"
+interpolate-template 266-270 warning: Kotlin fills in the value `name` before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+  fix "Mark the value `name` with +, which interpolate escapes" 266-270 "+name"
+== corpus/kotlin-interpolate-block.json: a joinToString at the head of a sum is read once, its mark judged where it lands
+unsafe-interpolation 260-265 error: interpolate always throws here: name lands in onclick, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a joinToString in a template of a string that is trimmed is not read alone, where its mark does not land
+interpolate-template 264-309 warning: Kotlin fills in ${listOf(+name).joinToString(""…} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+  fix "Mark ${listOf(+name).joinToString(\"\"…} with +, which interpolate escapes" 264-309 "${+listOf(+name).joinToString(\"\", \"<script>\")}"
+== corpus/kotlin-interpolate-block.json: a comment beside a value of a joinToString is no part of it
+unsafe-interpolation 260-265 error: interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a joinToString of two literals at the head of a sum is read once
+unsafe-interpolation 260-265 error: interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a joinToString in a sum in a template of the block is warned once, as the value Kotlin fills in
+interpolate-template 259-314 warning: Kotlin fills in the value `listOf(+name).joinToString(""…` before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+== corpus/kotlin-interpolate-block.json: a separator a joinToString writes twice is said of once
+missing-value 298-307 error: data-text needs a value; without one Datastar raises ValueRequired.
+== corpus/kotlin-interpolate-block.json: a joinToString in a lambda the block does not give is not read
+== corpus/kotlin-interpolate-block.json: a joinToString compared in a condition is not read
+== corpus/kotlin-interpolate-block.json: a joinToString a val gives the block is read where it lands
+unsafe-interpolation 268-273 error: interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
 == corpus/kotlin-interpolate.json: a template in the format is filled before interpolate sees it
 interpolate-template 16-22 warning: Kotlin fills in $query before interpolate sees the markup, so interpolate neither escapes nor refuses it. Make it a %s placeholder and pass the value to interpolate.
   fix "Make $query a %s placeholder, which interpolate escapes" 16-22 "%s"
