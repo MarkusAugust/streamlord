@@ -85,9 +85,11 @@ All notable changes to Streamlord are recorded here. The format follows
   an `Html` of the placeholder form holding one. Such an `Html` handed on by name or in brackets is
   an error in an attribute, and in a `<textarea>`, a `<title>`, a comment, or where it leaves a tag
   or an element open, since core escapes it there as it reads it. A literal in a template of its
-  format, `${"<i>"}`, counts as the markup it writes (#374). A mark of an outer block written
-  in a block inside it is an error, with the value marked in that block as its fix, and a warning
-  where the inner block is a lambda kept for later. A list holding a mark is no longer offered
+  format, `${"<i>"}`, counts as the markup it writes, and a list joined with literals,
+  `listOf(+name).joinToString("", "<script>", "</script>")`, as the string it gives, each mark
+  where it lands (#374). A mark of an outer block written in a block inside it is an error, with
+  the value marked in that block as its fix, and a warning where the inner block is a lambda kept
+  for later. A list holding a mark is no longer offered
   written out, and a template holding the block's own mark no longer the `+` that would be refused
   (#360).
 - A multi-dollar literal in a template's code, `"${interpolate { $$"<p>$m</p>" }}"`, opens its

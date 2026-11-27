@@ -502,7 +502,7 @@ private fun Analyzer.trustedSetTo(
 internal fun markedValue(ip: Interpolation): String? = if (ip.kind == InterpolationKind.SIMPLE) null else marked(ip.text)
 
 /** What [text], an expression, marks with `+`, as written and without parentheses around all of it; null where nothing is marked. */
-private fun marked(text: String): String? =
+internal fun marked(text: String): String? =
     text
         .trim()
         .takeIf { it.startsWith("+") && !it.startsWith("++") }
@@ -1334,7 +1334,7 @@ private fun marksWhatever(
 }
 
 /** Where [code], the code of [ip] as written, stands in [src], or null where it is not inside the template. */
-private fun codeSpan(
+internal fun codeSpan(
     src: String,
     ip: Interpolation,
     code: String,
@@ -2507,6 +2507,8 @@ internal fun Analyzer.markupLiterals(
                 }
 
                 call.name == "joinToString" -> {
+                    // A list joined with literals is read as one string, where it starts.
+                    joinedString(src, a, fileFacts(src).code)?.takeIf { it.end == b }?.let { out += it.start }
                     inT(receiver)
                     inT(lambda)
                 }
