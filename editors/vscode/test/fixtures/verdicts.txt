@@ -11765,6 +11765,33 @@ missing-value 298-307 error: data-text needs a value; without one Datastar raise
 == corpus/kotlin-interpolate-block.json: a joinToString compared in a condition is not read
 == corpus/kotlin-interpolate-block.json: a joinToString a val gives the block is read where it lands
 unsafe-interpolation 268-273 error: interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a var given a mark on the line after one ending in !! holds the mark from then on
+unsafe-interpolation 317-319 error: interpolate always throws here: m lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a var given a mark under an annotation on its own line holds the mark from then on
+unsafe-interpolation 331-333 error: interpolate always throws here: m lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a block under an alias is core's where a value of the alias's name is declared elsewhere in the file
+unsafe-interpolation 112-120 error: interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a block under an alias is not read where a value of the alias's name is in sight
+unsafe-interpolation 132-137 warning: Kotlin writes $name into a script, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there.
+== corpus/kotlin-interpolate-block.json: a block under an alias is core's when the file imports another interpolate
+unsafe-interpolation 143-151 error: interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+unescaped-interpolation 205-210 warning: Kotlin writes $name into the HTML as it is. If it can hold text from outside, escape it before it goes in, or build this part with kotlinx.html, which escapes text; if it is markup you built, declare it Html or wrap it in Trusted(...).
+  fix "Mark $name as markup" 205-210 "${Trusted(name)}" (not preferred)
+    edit 103-103 "\nimport io.github.markusaugust.streamlord.core.domain.Trusted"
+== corpus/kotlin-interpolate-block.json: a placeholder call under an alias is core's when the file imports another interpolate
+unsafe-interpolation 141-143 error: interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a block written with core's package is core's in a file that imports another interpolate
+unsafe-interpolation 373-381 error: interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a placeholder call by an alias a parameter of the same name hides is not core's
+unsafe-interpolation 200-202 error: interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: the text of a block by an alias a parameter of the same name hides is not core's escaped markup
+unescaped-interpolation 155-182 hint: Kotlin writes ${page { "<p>x</p>" }.text} into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). Marking the values is not offered here: it would escape this value, which may be markup you built.
+== corpus/kotlin-interpolate-block.json: the text of a block by an alias a lambda's parameter hides is not core's escaped markup
+interpolate-template 329-333 warning: Kotlin fills in ${s} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+  fix "Mark ${s} with +, which interpolate escapes" 329-333 "${+s}"
+== corpus/kotlin-interpolate-block.json: a block by an alias a lambda's parameter hides is not core's in a template of the block
+interpolate-template 200-257 warning: Kotlin fills in ${fs.joinToString { page -> pag…} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+== corpus/kotlin-interpolate-block.json: the text of a block by an alias a lambda's own val hides is not core's escaped markup
 == corpus/kotlin-interpolate.json: a template in the format is filled before interpolate sees it
 interpolate-template 16-22 warning: Kotlin fills in $query before interpolate sees the markup, so interpolate neither escapes nor refuses it. Make it a %s placeholder and pass the value to interpolate.
   fix "Make $query a %s placeholder, which interpolate escapes" 16-22 "%s"

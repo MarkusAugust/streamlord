@@ -801,7 +801,7 @@ internal fun markupValue(
         if (on.isMarkup() && !rawBlock(src, textOf, at)) return true
         if (on == null && sdk.core &&
             (
-                interpolateCall(src, textOf) || coreCall(src, textOf, "Trusted") ||
+                interpolateCall(src, textOf, at) || coreCall(src, textOf, "Trusted") ||
                     (KOTLIN_NAME.matchEntire(textOf) != null && declaredKind(src, textOf, at).isMarkup())
             )
         ) {
@@ -845,7 +845,7 @@ internal fun markupValue(
     if (elements) return sdk.htmlDsl != false && USES_ELEMENTS.containsMatchIn(src)
     if (call.name != "joinToString") return false
     val transform = lambda ?: namedLambda(call.args, "transform")
-    if (transform != null) return markupValue(src, lambdaResult(transform), at, depth, sdk, editor)
+    if (transform != null) return !hidesAlias(src, transform) && markupValue(src, lambdaResult(transform), at, depth, sdk, editor)
     return call.receiver != null && markupElements(src, call.receiver, at, depth, sdk, editor)
 }
 
@@ -930,10 +930,28 @@ private fun markupElements(
     if ((r.name == "map" || r.name == "mapIndexed" || r.name == "mapNotNull") &&
         lambda != null
     ) {
-        return markupValue(src, lambdaResult(lambda), at, depth, sdk, editor)
+        return !hidesAlias(src, lambda) && markupValue(src, lambdaResult(lambda), at, depth, sdk, editor)
     }
     return false
 }
+
+/**
+ * Whether [lambda] declares a name an alias of core's interpolate goes by, a parameter or a `val`, which hides the alias in
+ * it: its result is read at a place outside it, where [coreCallAt] cannot see that.
+ */
+private fun hidesAlias(
+    src: String,
+    lambda: String,
+): Boolean {
+    val aliases = coreNames(src, "interpolate") - "interpolate"
+    if (aliases.isEmpty()) return false
+    val head = LAMBDA_HEAD.find(lambda)?.value.orEmpty()
+    val declared = KOTLIN_NAME.findAll(head).map { it.value } + LOCAL_NAME.findAll(lambda).map { it.groupValues[1] }
+    return declared.any { it in aliases }
+}
+
+/** A `val` or a `var` declared in a lambda, by its name. */
+private val LOCAL_NAME = regex("""\bva[lr]\s+([\p{L}_][\p{L}\p{Nd}_]*)""")
 
 private val KEYWORD = regex("""\b(?:fun|va[lr])\b""")
 private val DECLARED =
@@ -1231,24 +1249,27 @@ internal fun markupHeldAsString(
 internal fun interpolateCall(
     src: String,
     value: String,
+    at: Int,
 ): Boolean {
     val text = unparen(value)
     if (coreCall(src, text, "interpolate")) return true
-    val m = wholeBlockCall(src, text) ?: return false
+    val m = wholeBlockCall(src, text, at) ?: return false
     if (m.groupValues[1] == "interpolate" && !text.startsWith(DOMAIN) &&
-        (shadowsCore(src, "interpolate") || !imports(src, DOMAIN, "interpolate") || declaredInFile(src, "interpolate"))
+        (!imports(src, DOMAIN, "interpolate") || declaredInFile(src, "interpolate"))
     ) {
         return false
     }
     return blockGives(src, text, m, -1) == true
 }
 
-/** The call of [text] when all of it is one `interpolate { }` block, by any of the names the file gives it. */
+/** The call of [text], written at [at], when all of it is one block of core's `interpolate { }`, by any name it goes by. */
 private fun wholeBlockCall(
     src: String,
     text: String,
+    at: Int,
 ): MatchResult? {
     val m = blockCalls(src).find(text)?.takeIf { it.range.first == 0 } ?: return null
+    if (!coreCallAt(src, "interpolate", m.groupValues[1], at, text.startsWith("$DOMAIN."))) return null
     return m.takeIf { closing(text, depths(text), m.range.last) == text.length }
 }
 
@@ -1259,7 +1280,7 @@ private fun rawBlock(
     at: Int,
 ): Boolean {
     val text = unparen(value)
-    return wholeBlockCall(src, text)?.let { blockGives(src, text, it, at) } == false
+    return wholeBlockCall(src, text, at)?.let { blockGives(src, text, it, at) } == false
 }
 
 /** What the block [m] opens in [text] gives, as [authored] reads it, its names as they are declared at [at]. */
@@ -1311,9 +1332,9 @@ private fun markupText(
     name: String,
     at: Int,
 ): Boolean {
-    val of = declarationOf(src, name, at)?.textOf ?: return false
-    return interpolateCall(src, of) ||
-        (KOTLIN_NAME.matchEntire(of) != null && declaredKind(src, of, declarationOf(src, name, at)!!.at).isMarkup())
+    val d = declarationOf(src, name, at) ?: return false
+    val of = d.textOf ?: return false
+    return interpolateCall(src, of, d.at) || (KOTLIN_NAME.matchEntire(of) != null && declaredKind(src, of, d.at).isMarkup())
 }
 
 /** Whether every value a placeholder can give is a name set to the `.text` of an Html: markup held as a String. */

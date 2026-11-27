@@ -256,8 +256,6 @@ private fun assignBefore(
 /** What `\s` matches in java.util.regex. */
 private const val JAVA_SPACE = " \t\n\u000B\u000C\r"
 
-private val INTERPOLATE = setOf("interpolate")
-
 /**
  * `interpolate {`, `interpolate(prefixes) {`, or the block in the parentheses, `interpolate({` and
  * `interpolate(prefixes, {`, by its name `block =` too: a call of its own and no member of anything.
@@ -296,7 +294,9 @@ internal fun interpolateBlocks(
 ): List<InterpolateBlock> =
     blockCalls(src).findAll(src).filter { code[it.range.first] }.mapNotNullTo(ArrayList()) { m ->
         // Past core's package, where the call names it: Kotlin/JS gives no range of a group.
-        val name = m.range.first + if (m.value.startsWith("$DOMAIN.")) DOMAIN.length + 1 else 0
+        val qualified = m.value.startsWith("$DOMAIN.")
+        val name = m.range.first + if (qualified) DOMAIN.length + 1 else 0
+        if (!coreCallAt(src, "interpolate", m.groupValues[1], name, qualified)) return@mapNotNullTo null
         // A function declared by the name is no call of it.
         val before = codeBefore(src, code, m.range.first)
         if (before >= 2 && src.startsWith("fun", before - 2) && !isWordPart(src.getOrNull(before - 3))) {
@@ -523,30 +523,10 @@ public class Analyzer(
             val issues = eventArgumentIssues(site, null, eventCalls, opts.prefix)
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
-        // An interpolate the file takes from elsewhere is not core's, whose format this reads; nor one it
-        // declares, since the text cannot tell whether the call fits it.
-        val otherInterpolate = shadowsCore(src, "interpolate")
         // The block form: every literal in the braces is markup interpolate reads, its marked values taken where they stand.
-        val blocks =
-            if (otherInterpolate) {
-                emptyList()
-            } else {
-                interpolateBlocks(
-                    src,
-                    facts.code,
-                ).filter { !foreign(it.site.name, it.site.nameStart) }
-            }
+        val blocks = interpolateBlocks(src, facts.code).filter { !foreign(it.site.name, it.site.nameStart) }
         // The placeholder form's calls, in a template's code too: `"<p>${interpolate("<b>%s</b>", name)}</p>"`.
-        val placeholderSites =
-            if (otherInterpolate) {
-                emptyList()
-            } else {
-                interpolateCallSites(
-                    src,
-                    INTERPOLATE,
-                    KotlinLex(lex.strings, facts.code, lex.comments),
-                )
-            }
+        val placeholderSites = placeholderCallSites(src, KotlinLex(lex.strings, facts.code, lex.comments))
         val htmls = if (blocks.isEmpty()) emptyList() else placeholderHtmls(src, facts.code, placeholderSites, blocks)
         // The Html of the call whose opening bracket is at an offset, where it holds a mark of a block: an Html handed on is
         // escaped outside element text, marks, quotes and all.
@@ -1250,7 +1230,7 @@ public class Analyzer(
         lex: KotlinLex,
     ): (KotlinString) -> Boolean {
         val formats by lazy(LazyThreadSafetyMode.NONE) {
-            if (shadowsCore(src, "interpolate")) emptyList() else outermost(interpolateCallSites(src, INTERPOLATE, lex))
+            outermost(placeholderCallSites(src, lex))
         }
         val calls by lazy(LazyThreadSafetyMode.NONE) { outermost(interpolateCallSites(src, htmlSiteNames, lex)) }
         return { s ->

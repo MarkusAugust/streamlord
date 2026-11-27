@@ -118,7 +118,8 @@ All notable changes to Streamlord are recorded here. The format follows
   lambda is called on: `m.let { "<script>$it</script>" }` is an error as core refuses it, where it
   was a warning (#364).
 - In `interpolate { }`, a `var` given a mark in a statement of its own that always runs holds the
-  mark from there on, where it was read as any value it had been given (#364).
+  mark from there on, where it was read as any value it had been given (#364), after a line that
+  ends in `!!` or under an annotation of its own too (#374).
 - In `interpolate { }`, a block inside a lambda the outer block calls by name,
   `val f = { interpolate { ... } }; f()`, holding a mark of the outer block is an error, where it
   was a warning (#364).
@@ -126,7 +127,9 @@ All notable changes to Streamlord are recorded here. The format follows
   a `Trusted` that leaves an element open is an error where the `Html` lands in element text
   (#364).
 - `interpolate` imported under an alias, `import ...interpolate as page`, is read as `interpolate`,
-  its block and its placeholder form alike, unless the file declares the alias again (#364).
+  its block and its placeholder form alike, unless the file declares a function of the alias's
+  name, or a value of it is in sight at the call (#364, #374). It is read so in a file that imports
+  another `interpolate` too, where it was not read at all (#374).
 - `"<p>${interpolate { "<b>${+x}</b>" }.text}</p>"`, the form the rewrite to `interpolate` writes,
   is no longer hinted as unescaped: the `.text` of a block that gives a string literal is escaped
   markup, as the `.text` of the placeholder form was. So is a `val` set to it, and the block under
