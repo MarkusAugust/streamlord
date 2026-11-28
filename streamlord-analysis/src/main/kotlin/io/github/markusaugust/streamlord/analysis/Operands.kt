@@ -290,28 +290,43 @@ internal class Operands(
      */
     fun startsStatement(at: Int): Boolean {
         val start = startBefore(at)
-        if (start < 0 || skip(start, true) != at) return false
+        return start >= 0 && skip(start, true) == at && endsBefore(at)
+    }
+
+    /** Whether what stands before [at] ends a statement that runs whenever what is around it does. */
+    private fun endsBefore(at: Int): Boolean {
         val before = skipBack(at)
         if (before == 0) return true
+        // An annotation before the statement is its own, and what stands before it decides; so past a label's `@`.
+        annotationBefore(before)?.let { return endsBefore(it) }
         val c = src[before - 1]
         return when {
             c == ';' || c == '{' -> true
 
-            // A bracket closes a call, or the test of an `if` or a loop, or an annotation's arguments.
+            // A bracket closes a call, or the test of an `if` or a loop.
             c == ')' -> matching(before - 1).let { open -> open >= 0 && plainWordBefore(open) }
 
             isWordPart(c) -> plainWordBefore(before)
+
+            // `!!` ends the value before it, as a call's bracket does.
+            c == '!' && ch(before - 2) == '!' -> true
 
             // Past a literal or a bracket the statement before has ended; past an operator, it goes on in this one.
             else -> c in "\"']}"
         }
     }
 
-    /** Whether the word that ends at [to], past blanks, is no word of [CONTROL] and names no annotation. */
+    /** Where the annotation that ends at [to] starts, `@Suppress("x")` or `@Name`: its `@`; null where none ends there. */
+    private fun annotationBefore(to: Int): Int? {
+        val end = if (ch(to - 1) != ')') to else matching(to - 1).takeIf { it >= 0 }?.let(::skipBack) ?: return null
+        val start = wordBefore(end)
+        return (start - 1).takeIf { start < end && ch(it) == '@' }
+    }
+
+    /** Whether the word that ends at [to], past blanks, is no word of [CONTROL]. */
     private fun plainWordBefore(to: Int): Boolean {
         val end = skipBack(to)
-        val start = wordBefore(end)
-        return src.substring(start, end) !in CONTROL && ch(start - 1) != '@'
+        return src.substring(wordBefore(end), end) !in CONTROL
     }
 
     /** Where the word that ends at [to] starts: [to] where none does. */

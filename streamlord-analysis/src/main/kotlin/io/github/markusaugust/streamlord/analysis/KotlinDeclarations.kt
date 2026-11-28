@@ -152,7 +152,7 @@ internal class FileFacts(
     val markupLiterals: Set<Int> by lazy(LazyThreadSafetyMode.PUBLICATION) {
         val out = HashSet<Int>()
         val lex = lexKotlin(src)
-        if ("interpolate" in src && !shadowsCore(src, "interpolate")) {
+        if ("interpolate" in src) {
             for (b in interpolateBlocks(src, code)) {
                 val literals = lex.stringsIn(b.braces.first, b.braces.last)
                 val written = literals.filter { TAG.containsMatchIn(it.text) || it.interpolations.any { ip -> markedValue(ip) != null } }
@@ -173,12 +173,12 @@ internal class FileFacts(
         val names = coreNames(src, "Trusted")
         if (names.none { it in src }) return@lazy out
         val lex = lexKotlin(src)
-        val own = !shadowsCore(src, "Trusted")
         for (site in findCallSites(src, names, KotlinLex(lex.strings, code, lex.comments))) {
             val dot = codeBefore(src, code, site.nameStart)
             // Called on a receiver it is somebody else's, unless the receiver is core's package written out.
             val qualified = src.getOrNull(dot) == '.' && site.name == "Trusted" && qualifiedByCore(src, code, dot)
-            if (!qualified && (src.getOrNull(dot) == '.' || (site.name == "Trusted" && !own))) continue
+            if (!qualified && src.getOrNull(dot) == '.') continue
+            if (!coreCallAt(src, "Trusted", site.name, site.nameStart, qualified)) continue
             val arg = site.named("html") ?: site.positional.firstOrNull() ?: continue
             out += arg.start until arg.end
         }
@@ -187,7 +187,7 @@ internal class FileFacts(
 
     // The blocks of core's interpolate in the file.
     private val blocks: List<InterpolateBlock> by lazy(LazyThreadSafetyMode.PUBLICATION) {
-        if ("interpolate" in src && !shadowsCore(src, "interpolate")) interpolateBlocks(src, code) else emptyList()
+        if ("interpolate" in src) interpolateBlocks(src, code) else emptyList()
     }
 
     /** Where each literal starts that is [trustedArguments]' text: the argument or a literal of a sum that is, called in it by nothing else. */
@@ -1321,7 +1321,7 @@ private class Valued(
 )
 
 /** Whether the `.` at [dot] ends core's package written out, `io.github.markusaugust.streamlord.core.domain.Trusted`, blanks before it too. */
-private fun qualifiedByCore(
+internal fun qualifiedByCore(
     src: String,
     code: BooleanArray,
     dot: Int,

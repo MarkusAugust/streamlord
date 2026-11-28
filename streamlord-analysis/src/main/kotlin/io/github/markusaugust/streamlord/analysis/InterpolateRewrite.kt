@@ -197,17 +197,34 @@ internal fun coreAliases(src: String): Map<String, String> {
 }
 
 /**
- * Core's [name] and each alias the file imports it under that nothing in the file declares again, which would take the
- * name from the import: `page` of `import ...interpolate as page`.
+ * Core's [name] and each alias the file imports it under that no function of the file is declared by, which a call may
+ * mean instead: `page` of `import ...interpolate as page`. Whether a call by one of them is core's is [coreCallAt]'s.
  */
 internal fun coreNames(
     src: String,
     name: String,
 ): Set<String> {
     val facts = fileFacts(src)
-    val aliases = coreAliases(src).filter { (alias, of) -> of == name && !declaredInFile(src, alias) }.keys
+    val aliases = coreAliases(src).filter { (alias, of) -> of == name && facts.functions[alias].isNullOrEmpty() }.keys
     return aliases + name
 }
+
+/**
+ * Whether the call of [name] written [written] at [at] is core's [name]: after core's package ([qualified]), bare where the
+ * file takes the name from nowhere else, or by one of [coreNames] that no value of the same name in sight at [at] hides.
+ */
+internal fun coreCallAt(
+    src: String,
+    name: String,
+    written: String,
+    at: Int,
+    qualified: Boolean = false,
+): Boolean =
+    when {
+        qualified -> true
+        written == name -> !shadowsCore(src, name)
+        else -> written in coreNames(src, name) && declarationOf(src, written, at) == null
+    }
 
 /** Whether [src] declares [name] anywhere, a member or a local too, which takes the name from an import where it is seen. */
 internal fun declaredInFile(
@@ -229,8 +246,19 @@ internal fun interpolateCallSites(
 ): List<CallSite> {
     val aliases = if ("interpolate" in names) coreNames(src, "interpolate") - "interpolate" else emptySet()
     if (aliases.isEmpty()) return findCallSites(src, names, lex)
-    return findCallSites(src, names + aliases, lex).map { site ->
-        if (site.name in aliases) site.copy(name = "interpolate", nameEnd = site.nameEnd) else site
+    return findCallSites(src, names + aliases, lex).map { site -> if (site.name in aliases) site.copy(name = "interpolate") else site }
+}
+
+/** The calls of core's placeholder form in [src], as [coreCallAt] has them. */
+internal fun placeholderCallSites(
+    src: String,
+    lex: KotlinLex,
+): List<CallSite> {
+    val code = fileFacts(src).code
+    return interpolateCallSites(src, setOf("interpolate"), lex).filter { site ->
+        val dot = codeBefore(src, code, site.nameStart)
+        val qualified = src.getOrNull(dot) == '.' && qualifiedByCore(src, code, dot)
+        coreCallAt(src, "interpolate", src.substring(site.nameStart, site.nameEnd), site.nameStart, qualified)
     }
 }
 
