@@ -606,8 +606,10 @@ public class Analyzer(
             val mask = if (s.start in topLevel) lex.mask else facts.code
             val read = Operands(src, mask)
 
-            // A call after a string may change its text, marks and all: a list joined in it is then not read.
-            fun keepsText(k: KotlinString) = !k.called && read.postfixEnd(k.end, false) == k.end
+            // A call after a string may change its text, marks and all: a list joined in it is then not read. A trim of its
+            // edges moves no mark within the markup.
+            fun keepsText(k: KotlinString) =
+                !k.called && read.postfixEnd(k.end, false).let { it == k.end || EDGE_TRIMS.matchEntire(src.substring(k.end, it)) != null }
 
             // In a block, a literal handed to joinToString is read with the list it joins, and a list joined in a template
             // or a sum is written out where it stands: in a template the string around it reads it, where it is known.

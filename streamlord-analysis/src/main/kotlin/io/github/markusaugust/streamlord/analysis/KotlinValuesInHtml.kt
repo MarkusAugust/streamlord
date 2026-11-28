@@ -481,7 +481,7 @@ internal fun Analyzer.markedTrustedLiteral(
 }
 
 /** A `trim()`, `trimStart()` or `trimEnd()` at the end of a string: it takes white space off its edges alone. */
-private val EDGE_TRIMS = regex("""(?:\s*\.\s*trim(?:Start|End)?\s*\(\s*\))+\s*$""")
+internal val EDGE_TRIMS = regex("""(?:\s*\.\s*trim(?:Start|End)?\s*\(\s*\))+\s*$""")
 
 /** The call to `Trusted` that the `val` [arg] names is set to, and nothing more. */
 private fun Analyzer.trustedSetTo(

@@ -87,7 +87,7 @@ All notable changes to Streamlord are recorded here. The format follows
   or an element open, since core escapes it there as it reads it. A literal in a template of its
   format, `${"<i>"}`, counts as the markup it writes, and a list joined with literals,
   `listOf(+name).joinToString("", "<script>", "</script>")`, as the string it gives, each mark
-  where it lands (#374). A mark of an outer block written in a block inside it is an error, with
+  where it lands, through a `trim()`, `trimStart()` or `trimEnd()` after it too (#374). A mark of an outer block written in a block inside it is an error, with
   the value marked in that block as its fix, and a warning where the inner block is a lambda kept
   for later. A list holding a mark is no longer offered
   written out, and a template holding the block's own mark no longer the `+` that would be refused
