@@ -17,6 +17,14 @@ class ValueJudgementTest {
         opts: Source,
     ) = analyzer.analyzeKotlin(opts.copy(text = src)).filter { it.code == IssueCode.UNESCAPED_INTERPOLATION }.map { it.severity }
 
+    /** Each issue on [src] as its code, its severity and the first line of what it is said of, given the editor's [answer]. */
+    private fun shown(
+        src: String,
+        answer: ((Int, Int) -> ValueAnswer?)?,
+    ) = analyzer.analyzeKotlin(Source(src, SourceLanguage.KOTLIN, valueAnswer = answer)).map {
+        "${it.code.id} ${it.severity} ${src.substring(it.start, it.end).substringBefore('\n')}"
+    }
+
     @Test
     fun `a value looked up in a map may be null, so marking it is offered and not preferred, and the message says why`() {
         // A template writes null for a key the map does not hold, and interpolate writes nothing.
@@ -110,6 +118,70 @@ class ValueJudgementTest {
         val core = "io.github.markusaugust.streamlord.core.domain.Html"
         assertEquals(emptyList(), shown("kotlin.collections.List<$core>", core))
         assertEquals(listOf("\${items.joinToString(\"\")}", "\${h.text}"), shown("kotlin.collections.List<com.acme.Html>", "com.acme.Html"))
+    }
+
+    @Test
+    fun `the text of a val set to a block is read as the block's, in both editors`() {
+        // `h.text` is the text of the block `h` is set to: raw where it gives a name, escaped markup where it gives a literal.
+        val src =
+            """
+            import io.github.markusaugust.streamlord.core.domain.interpolate
+            fun raw(name: String): String {
+                val h = interpolate { name }
+                return "<p>${'$'}{h.text}</p>"
+            }
+            fun written(): String {
+                val h = interpolate { "<b>x</b>" }
+                return "<p>${'$'}{h.text}</p>"
+            }
+            """.trimIndent()
+
+        // IntelliJ answers core's Html for `h`, and the String of `name`.
+        fun ide(
+            s: Int,
+            e: Int,
+        ) = ValueAnswer(if (src.substring(s, e) == "h") CORE_HTML else "kotlin.String")
+        assertEquals(listOf("unescaped-interpolation WARNING \${h.text}"), shown(src, ::ide))
+        assertEquals(listOf("unescaped-interpolation HINT \${h.text}"), shown(src, null))
+    }
+
+    @Test
+    fun `a when branch that is an if over several lines is taken apart`() {
+        val src =
+            """
+            import io.github.markusaugust.streamlord.core.domain.interpolate
+            fun choice(c: Boolean, d: Boolean, label: String) =
+                "<p>${'$'}{interpolate {
+                    when {
+                        c ->
+                            if (d)
+                                label
+                            else
+                                "<b>x</b>"
+                        else -> "<i>y</i>"
+                    }
+                }.text}</p>"
+            fun written(c: Boolean, d: Boolean) =
+                "<p>${'$'}{interpolate {
+                    when {
+                        c ->
+                            if (d)
+                                "<b>a</b>"
+                            else
+                                "<b>x</b>"
+                        else -> "<i>y</i>"
+                    }
+                }.text}</p>"
+            """.trimIndent()
+
+        // IntelliJ answers core's Html for each block. `written`'s branches give only literals, so nothing is said of it.
+        fun ide(
+            s: Int,
+            e: Int,
+        ) = ValueAnswer(if (src.substring(s, e).trimStart('(').startsWith("interpolate {")) CORE_HTML else "kotlin.String")
+        // The branch may give `label`, a String: raw markup, which IntelliJ's answer of core's Html does not make safe.
+        assertEquals(listOf("unescaped-interpolation WARNING \${interpolate {"), shown(src, ::ide))
+        assertEquals(listOf("unescaped-interpolation HINT \${interpolate {"), shown(src, null))
     }
 
     @Test
@@ -339,3 +411,5 @@ class ValueJudgementTest {
         }
     }
 }
+
+private const val CORE_HTML = "io.github.markusaugust.streamlord.core.domain.Html"

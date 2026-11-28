@@ -280,22 +280,24 @@ internal fun branches(expr: String): List<String>? {
             open = skipSpace(open)
         }
         if (e.getOrNull(open) != '{' || closing(e, d, open) != e.length) return null
+        // The branches are found in the code, comments blank; their values are taken as written.
+        val code = withoutComments(e, lexKotlin(e).comments)
         val values = ArrayList<String>()
         var entry = open + 1
         var arrow = -1
         var k = open + 1
         while (k < e.length) {
-            if (d[k] == 1 && arrow < 0 && e.startsWith("->", k)) {
+            if (d[k] == 1 && arrow < 0 && code.startsWith("->", k)) {
                 arrow = k
                 k += 2
                 continue
             }
-            // A branch may start on the line after its arrow.
-            val atArrow = arrow >= 0 && e[k] == '\n' && (arrow + 2 until k).all { e[it].isWhitespace() }
-            if (k == e.length - 1 || (d[k] == 1 && !atArrow && (e[k] == ';' || e[k] == '\n'))) {
+            // A branch goes on past a line break that does not end its expression: after its arrow, an operator or an if's head.
+            val ends = d[k] == 1 && (code[k] == ';' || (code[k] == '\n' && !(arrow >= 0 && branchGoesOn(code, arrow + 2, k))))
+            if (k == e.length - 1 || ends) {
                 if (arrow >= 0) {
                     values += expand(e.substring(arrow + 2, k))
-                } else if (e.substring(entry, k).isNotBlank()) {
+                } else if (code.substring(entry, k).isNotBlank()) {
                     return null
                 }
                 arrow = -1
@@ -307,6 +309,20 @@ internal fun branches(expr: String): List<String>? {
     }
     return null
 }
+
+/** Whether the `when` branch of [code] from [from] goes on past the line break at [at], as [goesOn] reads a line break. */
+private fun branchGoesOn(
+    code: String,
+    from: Int,
+    at: Int,
+): Boolean {
+    var next = at + 1
+    while (next < code.length && code[next].isWhitespace()) next++
+    return goesOn(code.substring(from, at).trim(), code.substring(next, minOf(code.length, next + LOOK_PAST)))
+}
+
+/** How much of the code past a line break [branchGoesOn] reads: enough for an operator or `else ->`. */
+private const val LOOK_PAST = 80
 
 /**
  * The `+` chain the literal [first] stands in, read as one string: each literal's text, and a placeholder
