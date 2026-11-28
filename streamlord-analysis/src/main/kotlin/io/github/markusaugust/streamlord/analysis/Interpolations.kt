@@ -451,9 +451,10 @@ private val JOIN_PARAMETERS = listOf("separator", "prefix", "postfix")
 
 /**
  * `listOf(a, b).joinToString(separator, prefix, postfix)` from [from], read as one string: the prefix, each value with
- * the separator between, the postfix, as a `+` chain of them is read ([chainFrom]), each value a placeholder. Read only
- * where each value is marked with `+` or a name, and the separator, the prefix and the postfix are literals or left to
- * their defaults; null for anything else, a transform or a limit among them. [mask] marks the file's code.
+ * the separator between, the postfix, as a `+` chain of them is read ([chainFrom]), each value a placeholder and each
+ * literal among them its text. Read only where each value is marked with `+`, a name or a literal, and the separator, the
+ * prefix and the postfix are literals or left to their defaults; null for anything else, a transform or a limit among
+ * them. [mask] marks the file's code.
  */
 internal fun joinedString(
     src: String,
@@ -465,7 +466,10 @@ internal fun joinedString(
     val list = parseArgs(src, open) ?: return null
     val values = list.args.map { uncommented(src, it) }
     if (list.trailingLambda || values.isEmpty()) return null
-    if (values.any { marked(it.text) == null && KOTLIN_NAME.matchEntire(it.text) == null }) return null
+
+    // A trim or a comment after a literal leaves it no value of its own.
+    fun literalOf(a: Arg) = a.string?.takeIf { it.end == a.end && !it.unterminated }
+    if (values.any { marked(it.text) == null && KOTLIN_NAME.matchEntire(it.text) == null && literalOf(it) == null }) return null
     val dot = read.skip(list.closeParen + 1, true)
     val name = read.skip(dot + 1, true)
     if (src.getOrNull(dot) != '.' || read.word(name) != "joinToString") return null
@@ -477,8 +481,7 @@ internal fun joinedString(
     for ((k, a) in args.args.withIndex()) {
         val parameter = a.named ?: JOIN_PARAMETERS[k]
         if (parameter !in JOIN_PARAMETERS || parameter in given) return null
-        // A trim or a comment after the literal leaves it no argument of its own.
-        given[parameter] = a.string?.takeIf { it.end == a.end && !it.unterminated } ?: return null
+        given[parameter] = literalOf(a) ?: return null
     }
     // The separator is written once for each value after the first: a template in it would be filled in each time.
     val separator = given["separator"]
@@ -502,13 +505,18 @@ internal fun joinedString(
                 text.append(DEFAULT_SEPARATOR)
             }
         }
-        interpolations += Interpolation(v.start, v.end, InterpolationKind.OPERAND, v.text, text.length)
-        repeat(PLACEHOLDER.length) { map += v.start }
-        text.append(PLACEHOLDER)
+        val element = literalOf(v)
+        if (element != null) {
+            literal(element)
+        } else {
+            interpolations += Interpolation(v.start, v.end, InterpolationKind.OPERAND, v.text, text.length)
+            repeat(PLACEHOLDER.length) { map += v.start }
+            text.append(PLACEHOLDER)
+        }
     }
     given["postfix"]?.let { literal(it) }
     map += args.closeParen
-    val literals = args.args.mapNotNull { it.string }
+    val literals = values.mapNotNull { literalOf(it) } + args.args.mapNotNull { it.string }
     return KotlinString(
         start = from,
         end = args.closeParen + 1,
