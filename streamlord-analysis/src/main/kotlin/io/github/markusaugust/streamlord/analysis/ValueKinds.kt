@@ -96,38 +96,46 @@ internal fun trustedName(
 
 /**
  * Whether a value may be null as far as the text shows: whether a value it may result in, one left
- * of `?:` aside, is `null` itself, a name declared with a `?` type, one with a `?.` and no `?:` in
- * its text, or one its chain shows to be null ([chainShowsNull]). A template writes null as `null`,
- * and `interpolate` writes nothing. The chain only adds: what it reads never makes a value one that
- * is not null.
+ * of `?:` aside, is `null` itself, a name declared with a `?` type, or one its chain shows to be null
+ * ([chainShowsNull]) or a safe call in its code may make null ([safeCallGivesOn]), its comments aside. A
+ * template writes null as `null`, and `interpolate` writes nothing.
  */
 internal fun mayBeNull(
     src: String,
     value: String,
     at: Int,
-): Boolean = mayBeNull(src, value, at, emptyMap(), null)
+): Boolean = mayBeNull(src, value, at, emptyMap(), 0)
 
 /**
- * [mayBeNull] with what each name a lambda around [value] stands for, [bound], and, for a part of a chain, how many links were
- * read before it, [links]: a part is read by its chain alone, since a `?.` elsewhere in its text may give it nothing.
+ * [mayBeNull] with what each name a lambda around [value] stands for, [bound], and how many links of a chain were read
+ * before it, [links].
  */
 private fun mayBeNull(
     src: String,
     value: String,
     at: Int,
     bound: Map<String, Boolean>,
-    links: Int?,
+    links: Int,
 ): Boolean =
-    templateValues(value).any { v ->
+    templateValues(uncommented(value)).any { v ->
         val t = v.text
         when {
             v.nonNull -> false
             t == "null" -> true
             t in bound -> bound.getValue(t)
             KOTLIN_NAME.matchEntire(t) != null -> declarationOf(src, t, at)?.type?.let { typeMayBeNull(src, it) } == true
-            else -> (links == null && "?:" !in t && "?." in t) || chainShowsNull(src, t, at, bound, links ?: 0)
+            else -> (links == 0 && "?:" !in t && safeCallGivesOn(t)) || chainShowsNull(src, t, at, bound, links)
         }
     }
+
+/**
+ * Whether a `?.` stands in the code of [t], where it may make the value null; one in a literal says nothing of it. Where in
+ * the value it stands is not read: one in a call's argument may be what the call gives.
+ */
+private fun safeCallGivesOn(t: String): Boolean {
+    val d = depths(t)
+    return (0 until t.length - 1).any { d[it] >= 0 && t.startsWith("?.", it) }
+}
 
 /** How many links of a chain are read: each reads the rest again, so a chain is read no further, and a long one costs its length. */
 private const val CHAIN_LINKS = 8

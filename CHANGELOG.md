@@ -146,7 +146,10 @@ All notable changes to Streamlord are recorded here. The format follows
   `List<String?>` no longer have the rewrite to `interpolate` preferred, since `interpolate`
   writes nothing where the template wrote `null`. Before, of the calls a value ends in, only a `?.`
   with no `?:` anywhere in the value made it one that may be null. The same reading decides
-  whether `Trusted(...)` is offered for a value in element text or a `<style>` (#349).
+  whether `Trusted(...)` is offered for a value in element text or a `<style>` (#349). A `?.` in
+  a literal or a comment no longer makes a value one that may be null, `s.plus("?.")` and
+  `s ?: error("no ${x?.size}")` are Strings, and a `?:` in a comment no longer makes one never
+  null: `q /* ?: */` is the `String?` it is (#349).
 - A value made of `?:` or brackets is judged as an `if` of the same values is. `${s ?: q}`
   with `q: String?` no longer has the rewrite to `interpolate` preferred, since `q` may be null
   and `interpolate` writes nothing where the template wrote `null`. An `Html` in brackets or on
