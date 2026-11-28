@@ -83,6 +83,9 @@ private val INCLUDES = regex("""\{%-?\s*(?:include|embed|url)\b|</?#include\b|\[
 /** A construct that leads to another branch: what stands on its other side is not written beside it. */
 private val BRANCH = regex("""\b(?:else|elif|elseif|elsif)\b""")
 
+/** Whether [value] holds a construct of [CONTROL], which decides what is written: one may open in a value and close in another. */
+internal fun holdsControl(value: String): Boolean = CONTROL.containsMatchIn(value)
+
 /** Whether the construct at [range] of [value], in a file of [engine], writes nothing where it stands. */
 internal fun writesNothing(
     value: String,

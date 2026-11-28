@@ -277,8 +277,12 @@ All notable changes to Streamlord are recorded here. The format follows
   last is a warning where it was a hint.
 - `repeated-attribute`, a new warning in HTML, templates and HTML in Kotlin strings: a Datastar
   attribute the element already has, in any capitals, with another value. The browser keeps the first
-  and drops the rest, so Datastar never reads them. A tag a template writes into is left alone, and
-  so is one with a directive for a name, such as `@auth` or `#if(x)`.
+  and drops the rest, so Datastar never reads them. A tag a template writes into between its
+  attributes is left alone, and so is one with a directive for a name, such as `@auth` or `#if(x)`.
+  What a value in quotes holds writes no attribute, so a JavaScript template literal in one,
+  `` @get(`/x/${$id}`) ``, no longer turns the check off, nor the order of `data-indicator`; a
+  construct that decides what is written, `{{#if a}}`, still does, since it may close in another
+  value (#313).
 - A class that is not `@Serializable` is read as Jackson writes it, where it turned the signal
   checks off for the whole project: a page declared from it with `toJsonValue`, a patch of it and a
   `readSignals<T>()` of it are judged by its public constructor properties, each by its name or its

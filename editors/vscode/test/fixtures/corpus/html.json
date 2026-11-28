@@ -250,6 +250,11 @@
     {"name":"a repeated attribute in Velocity branches written against a quote is one a branch","source":"<div class=\"x\"#if($open) data-show=\"true\"#else data-show=\"false\"#end></div>","issues":[]},
     {"name":"an attribute repeated with the value it has once decoded, or with none and an empty one, loses nothing","source":"<div data-show=\"1 &amp;&amp; 2\" data-show=\"1 && 2\" data-ignore-morph data-ignore-morph=\"\"></div>","issues":[]},
     {"name":"a tag still being typed above one with the same attribute has not repeated it","source":"<ul>\n  <li data-on:click=\"a()\"\n  <li data-on:click=\"b()\">x</li>\n</ul>","issues":[]},
-    {"name":"a repeated attribute beside a key in other letters, a bound class and an underscore","source":"<div data-signals:beløp=\"0\" :class=\"x\" _=\"on click\" data-show=\"true\" data-show=\"false\"></div>","issues":[{"code":"signal-name","start":18,"end":23},{"code":"repeated-attribute","start":69,"end":78,"severity":"warning"}]}
-  ]
+    {"name":"a repeated attribute beside a key in other letters, a bound class and an underscore","source":"<div data-signals:beløp=\"0\" :class=\"x\" _=\"on click\" data-show=\"true\" data-show=\"false\"></div>","issues":[{"code":"signal-name","start":18,"end":23},{"code":"repeated-attribute","start":69,"end":78,"severity":"warning"}]},
+  {"name": "a JavaScript template literal in a value leaves the tag's other attributes judged", "source": "<a data-on:click=\"@get(`/x/${$id}`)\" data-show=\"a\" data-show=\"b\"></a>", "issues": [{"code": "repeated-attribute", "start": 51, "end": 60, "severity": "warning"}]},
+  {"name": "a directive word in a value leaves the tag to the engine, since it may decide what is written", "source": "<p title=\"mail @if you can\" data-show=\"a\" data-show=\"b\"></p>", "issues": []},
+  {"name": "template syntax between the attributes still leaves the tag to the engine", "source": "<p ${attrs} data-show=\"a\" data-show=\"b\"></p>", "issues": []},
+  {"name": "a section that opens in one value and closes in another leaves the tag to the engine", "source": "<div class=\"{{#if a}}x\" data-show=\"$p{{/if}}\" data-show=\"$q\"></div>", "issues": []},
+  {"name": "a FreeMarker if across values leaves the tag to the engine", "source": "<div class=\"<#if a>x\" data-show=\"$a<#else>y\" data-show=\"$b</#if>\"></div>", "issues": []}
+ ]
 }
