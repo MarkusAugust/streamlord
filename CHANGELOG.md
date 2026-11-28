@@ -89,9 +89,10 @@ All notable changes to Streamlord are recorded here. The format follows
   `listOf(+name).joinToString("", "<script>", "</script>")`, as the string it gives, each mark
   where it lands (#374). A mark of an outer block written in a block inside it is an error, with
   the value marked in that block as its fix, and a warning where the inner block is a lambda kept
-  for later. A list holding a mark is no longer offered
-  written out, and a template holding the block's own mark no longer the `+` that would be refused
-  (#360).
+  for later. Where the value is joined with `+` or is an element of a list, the fix marks it
+  `+name`, as the fix for a value of the block's own does, where it wrote `${+name}` into code, and
+  in a multi-dollar literal it writes the literal's dollars (#381). A list holding a mark is no longer offered written out, and a
+  template holding the block's own mark no longer the `+` that would be refused (#360).
 - A multi-dollar literal in a template's code, `"${interpolate { $$"<p>$m</p>" }}"`, opens its
   templates with its own dollars: `$m` there is text, where it was read as a template.
 - In `interpolate { }`, a name set to a mark of the block, `val m = +name`, is judged as the mark

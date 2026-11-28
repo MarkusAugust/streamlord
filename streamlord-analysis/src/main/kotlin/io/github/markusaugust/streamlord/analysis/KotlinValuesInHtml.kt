@@ -366,7 +366,7 @@ internal fun Analyzer.checkInterpolateBlock(
     // text. An Html is marked as an Html, its marks resolved in its own markup.
     val holdsOwn = holding.filter { (ip, it) -> own(it.at) && !it.whole && !it.html && markedValue(ip) == null }.keys
     val issues = ArrayList<Issue>()
-    for ((ip, mark) in outer) issues += outerMarkLost(ip, mark, later(mark.at))
+    for ((ip, mark) in outer) issues += outerMarkLost(src, s, ip, mark, later(mark.at))
     // A template that is a mark of the block itself without a + on it, `$title` of `val title = +name`, is the mark where
     // it is written: judged there where the string is the block's markup for certain and so is the mark. Anywhere else,
     // or where a branch or a var may hold another value, it is the template Kotlin fills in, as any other.
@@ -1414,8 +1414,13 @@ private fun heldMarkLost(
     return Issue(arg.start, arg.end, message, if (mark.certain) Severity.ERROR else Severity.WARNING, IssueCode.INTERPOLATE_PLACEHOLDERS)
 }
 
-/** What interpolate throws for a template of a block that writes [mark], a mark of a block around it, which may run [later]. */
+/**
+ * What interpolate throws for a template of a block that writes [mark], a mark of a block around it, which may run [later].
+ * [format] is the block's string in [src].
+ */
 private fun outerMarkLost(
+    src: String,
+    format: KotlinString,
     ip: Interpolation,
     mark: HeldMark,
     later: Boolean,
@@ -1423,12 +1428,13 @@ private fun outerMarkLost(
     val shown = shortened(mark.value)
     val ofHtml = mark.holding != Holding.MARK
     val held = if (ofHtml) "an Html that holds a value marked in the interpolate { }" else "a mark of the interpolate { }"
+    val marked = markedAt(format, ip, mark.value, ip.start == format.start, ip.start > 0 && src[ip.start - 1] == '+')
     val advice =
         if (ofHtml) {
             "Hand the value to the call that builds the Html, at a %s placeholder."
         } else {
             if (PROPERTY_CHAIN.matchEntire(mark.value) != null) {
-                "Mark the value in this block: \${+${mark.value}}."
+                "Mark the value in this block: ${marked.trim()}."
             } else {
                 "Mark the value where it is written in this block."
             }
@@ -1440,7 +1446,7 @@ private fun outerMarkLost(
             "of the block that made it, so the value would be lost. $advice"
     val fixes =
         if (mark.whole && PROPERTY_CHAIN.matchEntire(mark.value) != null) {
-            listOf(Fix("Mark $shown in this block", ip.start, ip.end, "\${+${mark.value}}"))
+            listOf(Fix("Mark $shown in this block", ip.start, ip.end, marked))
         } else {
             emptyList()
         }
@@ -1524,20 +1530,29 @@ private fun Analyzer.markFix(
     val expr = if (ip.kind == InterpolationKind.SIMPLE) ip.text else ip.text.trim()
     val operand = markOperand(expr)
     val title = "Mark $shown with +, " + if (asIs) "where interpolate writes it as it is" else "which interpolate escapes"
+    return Fix(title, ip.start, ip.end, markedAt(format, ip, operand, first, tight), preferred = preferred, leads = true)
+}
+
+/**
+ * [operand] marked with `+` where [ip] stands in [format]: in a template, with the dollars of its literal, `${+name}`; a value
+ * joined with `+` as `+name`, after a `+` written without a space as ` +name`, and where it opens the chain ([first]) as a
+ * literal of its own, since a mark has no `plus`.
+ */
+private fun markedAt(
+    format: KotlinString,
+    ip: Interpolation,
+    operand: String,
+    first: Boolean,
+    tight: Boolean,
+): String {
     // The dollars of the literal the template stands in, which in a chain is one of several.
     val dollars = (format.literals.firstOrNull { ip.start in it.start until it.end } ?: format).dollars
-    val marked =
-        when {
-            ip.kind != InterpolationKind.OPERAND -> "$".repeat(dollars) + "{+" + operand + "}"
-
-            // A mark that opens the chain has no string before it to be joined to.
-            first -> "\"\${+$operand}\""
-
-            tight -> " +$operand"
-
-            else -> "+$operand"
-        }
-    return Fix(title, ip.start, ip.end, marked, preferred = preferred, leads = true)
+    return when {
+        ip.kind != InterpolationKind.OPERAND -> "$".repeat(dollars) + "{+" + operand + "}"
+        first -> "\"\${+$operand}\""
+        tight -> " +$operand"
+        else -> "+$operand"
+    }
 }
 
 /**
