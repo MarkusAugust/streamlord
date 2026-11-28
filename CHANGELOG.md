@@ -262,7 +262,9 @@ All notable changes to Streamlord are recorded here. The format follows
   judged by something else:
   - In a `catch` block, `$e` is the exception the `catch` names. It was read as a parameter or a
     value named `e` around the `try`: an `Int` of that name hid the hint, and a `String` made it a
-    warning. With no other `e` around, nothing changes.
+    warning. With no other `e` around, nothing changes. The variable is read where its name is in
+    backticks, where its type is annotated or written with blanks around its dots, and where its
+    block is still being typed (#317).
   - A lambda's parameters are found where a comma follows the last or a comment stands among them.
     They were not, so `$n` in such a lambda was judged as an unknown name, or as a value named `n`
     outside it.

@@ -426,6 +426,28 @@ class ValueStructureTest {
     }
 
     @Test
+    fun `a catch declares its variable written in backticks, with an annotated or spaced type, and while its block is typed`() {
+        fun page(handler: String) = "fun load() {}\nfun page(e: Int): String {\n    try { load() } $handler\n    return \"\"\n}\n"
+        assertEquals(listOf("\$e"), told(page("catch (`e`: Exception) { return \"<b>\$e</b>\" }")))
+        assertEquals(listOf("\$e"), told(page("catch (e: @Ann Exception) { return \"<b>\$e</b>\" }")))
+        assertEquals(listOf("\$e"), told(page("catch (e: java . lang . Exception) { return \"<b>\$e</b>\" }")))
+        assertEquals(listOf("\$e"), told(page("catch (e: java./* c */lang.Exception) { return \"<b>\$e</b>\" }")))
+        assertEquals(listOf("\$e"), told(page("catch (e: @Ann(intArrayOf(1)) Exception) { return \"<b>\$e</b>\" }")))
+        // A block not closed yet keeps the variable to the end of the file.
+        val typed = "fun load() {}\nfun f(e: Int) {\n    try { load() } catch (e: Exception) {\n        println(\"<b>\$e</b>\")\n"
+        assertEquals(listOf("\$e"), told(typed))
+        // So in a lambda, and in a catch inside another, both still being typed.
+        val lambda =
+            "fun load() {}\nfun f(e: Int) {\n    run {\n        try { load() } catch (e: Exception) {\n" +
+                "            println(\"<b>\$e</b>\")\n"
+        assertEquals(listOf("\$e"), told(lambda))
+        val nested =
+            "fun load() {}\nfun f(e: Int) {\n    try { load() } catch (e: Exception) {\n        try { load() } catch (e: Error) {\n" +
+                "            println(\"<b>\$e</b>\")\n"
+        assertEquals(listOf("\$e"), told(nested))
+    }
+
+    @Test
     fun `a block right after a catch's own is no part of the catch`() {
         val src =
             "fun f(e: Int, x: Int): String {\n    val r = try { a() } catch (e: Exception) { b() }\n" +

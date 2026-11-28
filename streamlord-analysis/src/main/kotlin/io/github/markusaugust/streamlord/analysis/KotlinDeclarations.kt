@@ -597,6 +597,46 @@ private fun lambdaParameters(
     return Read(src.substring(start, end), arrow + 2)
 }
 
+/**
+ * The variable and the type the brackets of a `catch` from [open] to [close] name in [blank], the code with its comments
+ * blank: all they hold is `name: Type`, but for annotations before it; `object : Type` is a value. A name in backticks is
+ * the name inside them, and the type is read past its annotations, blanks around its dots aside. It is read in their last
+ * stretch, so brackets in brackets cost no more than their length. Null where they name none.
+ */
+private fun catchVariable(
+    blank: String,
+    open: Int,
+    close: Int,
+): Pair<String, String>? {
+    val from = maxOf(open + 1, close - CATCH_VARIABLE_LENGTH)
+    val tail = blank.substring(from, close)
+    val colon = tail.lastIndexOf(':')
+    val before = tail.substring(0, maxOf(colon, 0)).trimEnd()
+    val ticked = before.endsWith("`")
+    val written = if (ticked) "`" + before.dropLast(1).substringAfterLast('`') + "`" else before.takeLastWhile(::isWordPart)
+    val name = written.removeSurrounding("`")
+    val type =
+        tail
+            .substring(colon + 1)
+            .trim()
+            .removeSuffix(",")
+            .trimEnd()
+            .replace(TYPE_ANNOTATIONS, "")
+            .replace(SPACED_DOT, ".")
+    var first = open + 1
+    while (first < close && blank[first].isWhitespace()) first++
+    val alone = first == from + before.length - written.length || blank[first] == '@'
+    return (name to type).takeIf {
+        name.firstOrNull()?.isDigit() == false && name != "object" && alone && WHOLE_TYPE.matchEntire(type) != null
+    }
+}
+
+/** The annotations a type is written after, `@Ann` and `@Ann(x)`. */
+private val TYPE_ANNOTATIONS = regex("""^(?:@[\p{L}_][\p{L}\p{Nd}_.]*(?:\((?:[^()]|\([^()]*\))*\))?\s*)+""")
+
+/** A dot between the names of a type with blanks around it, `java . lang`. */
+private val SPACED_DOT = regex("""\s*\.\s*""")
+
 /** How far back from its closing bracket a `catch` is read for its variable and the type. */
 private const val CATCH_VARIABLE_LENGTH = 500
 
@@ -2211,6 +2251,8 @@ private fun declarations(
                 val caught = f.caught?.takeIf { codeBefore(src, code, i) == it.end - 1 }
                 f.caught = null
                 if (caught != null) {
+                    // In sight through the block, to the end of the file where it is still being typed.
+                    caught.end = Int.MAX_VALUE
                     g.ends += caught
                 } else if (p != null && p.state == "after" && f.kind != "for") {
                     // A lambda in a loop's own brackets is no body of it.
@@ -2311,23 +2353,7 @@ private fun declarations(
                 if (before in marked) marks += literal
             }
             if (g.kind == "catch" && c == ')') {
-                // The variable is all the brackets hold, `name: Type`, but for annotations before it; `object : Type` is a value.
-                // It is read in their last stretch, so brackets in brackets cost no more than their length.
-                val from = maxOf(g.open + 1, i - CATCH_VARIABLE_LENGTH)
-                val tail = blank.substring(from, i)
-                val colon = tail.lastIndexOf(':')
-                val before = tail.substring(0, maxOf(colon, 0)).trimEnd()
-                val name = before.takeLastWhile { isWordPart(it) }
-                val type =
-                    tail
-                        .substring(colon + 1)
-                        .trim()
-                        .removeSuffix(",")
-                        .trimEnd()
-                var first = g.open + 1
-                while (first < i && blank[first].isWhitespace()) first++
-                val alone = first == from + before.length - name.length || blank[first] == '@'
-                if (name.firstOrNull()?.isDigit() == false && name != "object" && alone && WHOLE_TYPE.matchEntire(type) != null) {
+                catchVariable(blank, g.open, i)?.let { (name, type) ->
                     outer.caught = add(name, Declaration(g.open + 1, g.open, type).also { it.end = i + 1 })
                 }
             }
