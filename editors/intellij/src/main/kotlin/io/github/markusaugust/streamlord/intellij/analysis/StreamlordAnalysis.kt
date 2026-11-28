@@ -141,7 +141,7 @@ class StreamlordAnalysis(
 
     /**
      * Where the name of each of [sites] starts that the Kotlin plugin resolves to something other than Streamlord. Each call
-     * is resolved once for the verdicts of [resolved]; while the IDE indexes, none is.
+     * has one verdict in [resolved], the first kept where two passes resolve it at once; while the IDE indexes, none is.
      */
     private fun foreignCalls(
         file: KtFile,
@@ -151,11 +151,11 @@ class StreamlordAnalysis(
         if (DumbService.isDumb(project)) return emptySet()
         val out = HashSet<Int>()
         for (site in sites) {
+            // Two highlighting passes may resolve the same call at once; the first verdict kept is the one that counts.
             val foreign =
-                resolved.foreign[site.nameStart] ?: (!StreamlordResolve.mayBeStreamlord(file, site)).also {
+                resolved.foreign[site.nameStart] ?: (!StreamlordResolve.mayBeStreamlord(file, site)).let {
                     UiThreadWork.note()
-                    resolves.incrementAndGet()
-                    resolved.foreign[site.nameStart] = it
+                    resolved.foreign.putIfAbsent(site.nameStart, it) ?: it.also { resolves.incrementAndGet() }
                 }
             if (foreign) out += site.nameStart
         }
@@ -263,7 +263,10 @@ class StreamlordAnalysis(
             CachedValueProvider.Result.create(names, file)
         }
 
-    /** How many calls have been resolved, for a test to see that an edit elsewhere resolves none again. */
+    /**
+     * How many verdicts have been kept, one for each call each time the verdicts are found anew, for a test to see that an
+     * edit elsewhere resolves none again; a call two passes resolve at once counts once.
+     */
     internal val resolves = AtomicInteger()
 
     /** What is answered of the values the analysis asks about in a file; a value's type can change with any file in the project. Nothing while the IDE indexes. */
