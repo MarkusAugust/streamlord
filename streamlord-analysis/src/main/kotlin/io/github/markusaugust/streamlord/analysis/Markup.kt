@@ -191,6 +191,24 @@ internal fun hasTemplateSyntax(value: String): Boolean {
     return TEMPLATE_SYNTAX.findAll(value).any { it.value != "\${" || quotes.at(it.range.first) != '`' }
 }
 
+/**
+ * Whether [source], the markup of [tag] from its `<`, holds template syntax between its attributes, where an engine may
+ * write attributes of its own. A value in quotes writes none, so what is in it does not count here, unless it holds a
+ * construct that decides what is written ([holdsControl]), which may open in one value and close in another. A value is
+ * read as a value, by [hasTemplateSyntax], where what it holds matters.
+ */
+internal fun tagHasTemplateSyntax(
+    tag: Tag,
+    source: String,
+): Boolean {
+    val between = source.toCharArray()
+    for (a in tag.attributes) {
+        if (a.value == null || !a.quoted || holdsControl(a.value)) continue
+        between.fill(' ', a.valueStart - tag.start, a.valueEnd - tag.start)
+    }
+    return hasTemplateSyntax(between.concatToString())
+}
+
 /** Whether [value] holds template syntax besides the [PLACEHOLDER] of a Kotlin template, which the expression checks read around. */
 internal fun hasForeignTemplateSyntax(value: String): Boolean = hasTemplateSyntax(value.replace(PLACEHOLDER, "kt____"))
 
@@ -1296,7 +1314,7 @@ public class MarkupValidator(
         if (tagSource == null) return issues
         // A tag with no `>` yet runs on into the next one, whose name and attributes are then read as its own.
         val unclosed = tag.attributes.any { tagSource.getOrNull(it.nameStart - tag.start - 1) == '<' }
-        return if (unclosed || hasTemplateSyntax(tagSource)) emptyList() else issues
+        return if (unclosed || tagHasTemplateSyntax(tag, tagSource)) emptyList() else issues
     }
 
     /** `data-on-signal-patch-filter` with no `data-on-signal-patch` beside it, the one plugin that reads it (onSignalPatch.ts). */
@@ -1359,7 +1377,7 @@ public class MarkupValidator(
             attrs.subList(0, at).firstOrNull {
                 it.name.asciiLowercase() == "${prefix}init" && it.value != null && sendsAtOnce(decodeEntities(it.value).text)
             } ?: return emptyList()
-        if (tagSource != null && hasTemplateSyntax(tagSource)) return emptyList()
+        if (tagSource != null && tagHasTemplateSyntax(tag, tagSource)) return emptyList()
         val indicator = attrs[at]
         val fix =
             tagSource?.let { source ->
@@ -1412,9 +1430,9 @@ public class MarkupValidator(
         // and the error on the same name says so.
         val hasKey = !catalog.parseAttributeName(indicator.name.asciiLowercase(), prefix)?.key.isNullOrEmpty()
         if (hasKey == !indicator.value.isNullOrEmpty()) return emptyList()
-        // Template syntax in a value, or attributes spread into the tag by name, leave what it
-        // sends unknown until rendered.
-        if ((tagSource != null && hasTemplateSyntax(tagSource)) ||
+        // Template syntax between the attributes or in a value, or attributes spread into the tag by
+        // name, leave what it sends unknown until rendered.
+        if ((tagSource != null && tagHasTemplateSyntax(tag, tagSource)) ||
             tag.attributes.any { (it.value != null && hasTemplateSyntax(it.value)) || PLAIN_ATTRIBUTE_NAME.matchEntire(it.name) == null }
         ) {
             return emptyList()

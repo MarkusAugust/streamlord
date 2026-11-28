@@ -11027,6 +11027,12 @@ repeated-attribute 62-75 warning: The browser keeps the first data-on:click of a
 == corpus/html.json: a repeated attribute beside a key in other letters, a bound class and an underscore
 signal-name 18-23 warning: Datastar's client reads this key as the signal beløp, which no $name reaches: Datastar reads only ASCII letters, digits and _ after a $, so the browser looks for a JavaScript variable instead; only the bracket form $['beløp'] reads it.
 repeated-attribute 69-78 warning: The browser keeps the first data-show of an element and drops this one, so Datastar never reads it. Move its value into the first.
+== corpus/html.json: a JavaScript template literal in a value leaves the tag's other attributes judged
+repeated-attribute 51-60 warning: The browser keeps the first data-show of an element and drops this one, so Datastar never reads it. Move its value into the first.
+== corpus/html.json: a directive word in a value leaves the tag to the engine, since it may decide what is written
+== corpus/html.json: template syntax between the attributes still leaves the tag to the engine
+== corpus/html.json: a section that opens in one value and closes in another leaves the tag to the engine
+== corpus/html.json: a FreeMarker if across values leaves the tag to the engine
 == corpus/kotlin-actions.json: a Kotlin template in an option's value or key is an expression, not judged
 unsafe-interpolation 163-170 warning: Kotlin writes ${mode} into data-on, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label; only a number or a boolean is safe to write in.
 unsafe-interpolation 234-239 warning: Kotlin writes ${ct} into data-on, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label; only a number or a boolean is safe to write in.
